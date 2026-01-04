@@ -452,6 +452,19 @@
     initCCTV();
     initDailyWeather();
     setTimeout(initWeeklyWeather, 1000); // 1초 뒤에 주간예보 실행 (부하 분산)
+
+    // PWA Service Worker 등록
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('ServiceWorker registration successful');
+                })
+                .catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+        });
+    }
 </script>
 </body>
 </html>
