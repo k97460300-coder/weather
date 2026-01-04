@@ -148,12 +148,36 @@
     </div>
 
     <div class="link-footer">
+        <button id="btn-install" class="btn" style="display:none; background:#e60023; color:white;"><span>📲 앱으로 설치하기</span></button>
         <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" class="btn"><span>🏔️ 汉拿山探访</span></a>
         <a href="https://weather.naver.com/today/14000000" target="_blank" class="btn"><span>⚠️ 济州气象特报</span></a>
         <a href="https://m.search.naver.com/search.naver?query=%EC%A0%9C%EC%A3%BC+%EC%9E%AC%EB%82%9C%EB%AC%B8%EC%9E%90" target="_blank" class="btn"><span>📱 济州灾难短信</span></a>
     </div>
 
 <script>
+    // PWA 설치 버튼 로직
+    let deferredPrompt;
+    const installBtn = document.getElementById('btn-install');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // 브라우저 기본 설치 배너 막기
+        e.preventDefault();
+        deferredPrompt = e;
+        // 설치 버튼 보여주기
+        installBtn.style.display = 'flex';
+    });
+
+    installBtn.addEventListener('click', (e) => {
+        installBtn.style.display = 'none';
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+                console.log('User accepted the install prompt');
+            }
+            deferredPrompt = null;
+        });
+    });
+
     // 1. 설정값 정의
     const MASTER_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce'; 
     const API_KEY = MASTER_KEY.trim(); 
