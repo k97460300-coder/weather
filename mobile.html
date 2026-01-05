@@ -1,73 +1,155 @@
-  <!DOCTYPE html>
-  <html lang="ko">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <title>Jeju Mobile Weather</title>
-      <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-      <style>
-          body { margin: 0; padding: 10px; background-color: #121212; font-family: sans-serif; color: #fff; }
-          .container { display: flex; flex-direction: column; gap: 15px; padding-bottom: 50px; width: 100%; }
-          .card { background: #1e1e1e; border-radius: 12px; overflow: hidden; padding: 15px; }
-          .title { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #eee; border-bottom: 1px solid #333; padding-bottom: 8px; }
-          .video-box { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; margin-bottom: 10px; border-radius: 8px; overflow:
-  hidden; }
-          video { width: 100%; height: 100%; object-fit: cover; }
-          .label { position: absolute; bottom: 5px; left: 8px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; font-size: 12px;
-  font-weight: bold; }
-          .weather-row { display: flex; overflow-x: auto; gap: 0; padding-bottom: 10px; scrollbar-width: none; }
-          .weather-row::-webkit-scrollbar { display: none; }
-          .w-item { min-width: 60px; text-align: center; display: flex; flex-direction: column; align-items: center; }
-          .w-time { font-size: 12px; color: #aaa; margin-bottom: 5px; }
-          .w-temp { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
-          .btn { background: #d32f2f; color: white; padding: 12px; text-align: center; border-radius: 8px; text-decoration: none; font-weight: bold;
-  display: block; margin-bottom: 10px; }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="btn">⚠️ 1. 여기 눌러서 권한 요청하기</a>
-          <div class="card">
-              <div class="title">🔴 제주 실시간 CCTV</div>
-              <div class="video-box"><div class="label">🏝️ 우도</div><video id="v1" autoplay muted playsinline></video></div>
-              <div class="video-box"><div class="label">🏔️ 한라산</div><video id="v2" autoplay muted playsinline></video></div>
-          </div>
-          <div class="card">
-              <div class="title">☀️ 오늘의 날씨</div>
-              <div id="weather-list">로딩중...</div>
-          </div>
-      </div>
-  <script>
-      const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
-      const PROXY = 'https://cors-anywhere.herokuapp.com/';
-      function initCCTV() {
-          const streams =
-  [{id:'v1',url:'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8'},{id:'v2',url:'http://119.65.216.155:1935/live/cctv03.s
-  tream_360p/chunklist_w324217178.m3u8'}];
-          if (Hls.isSupported()) { streams.forEach(s => { const v=document.getElementById(s.id); const h=new Hls(); h.loadSource(s.url);
-  h.attachMedia(v); }); }
-      }
-      async function initWeather() {
-          const nx=52, ny=38; const now = new Date();
-          const ymd = ${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')};
-          const baseTime = now.getHours() < 2 ? "2300" : "0200";
-          const baseDate = now.getHours() < 2 ? String(Number(ymd)-1) : ymd;
-          try {
-              const url =
-  ${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=300&pageNo=1&dataType=JSON&base_da
-  te=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny};
-              const res = await fetch(url); const json = await res.json();
-              let html = '<div class="weather-row">';
-              json.response.body.items.item.forEach(i => {
-                  if(i.category === 'TMP' && i.fcstDate === ymd && i.fcstTime >= "0900" && i.fcstTime <= "2100") {
-                      html += <div class="w-item"><span class="w-time">${i.fcstTime.substring(0,2)}시</span><span
-  class="w-temp">${i.fcstValue}°</span></div>;
-                  }
-              });
-              html += '</div>'; document.getElementById('weather-list').innerHTML = html;
-          } catch(e) { document.getElementById('weather-list').innerHTML = '<div style="color:red;">날씨 로딩 실패 (CORS 요청 필요)</div>'; }
-      }
-      initCCTV(); initWeather();
-  </script>
-  </body>
-  </html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jeju Mobile Weather</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            margin: 0; padding: 10px; background-color: #222;
+            display: flex; flex-direction: column; align-items: center;
+            font-family: 'Noto Sans SC', sans-serif; min-height: 100vh;
+        }
+        .dashboard-container { display: flex; flex-direction: column; width: 100%; gap: 15px; padding-bottom: 30px; }
+        .capture-card {
+            width: 100%; background: #fff; border-radius: 16px; overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); display: flex; flex-direction: column;
+        }
+        /* CCTV 스타일 */
+        #card-cctv { background: #000; border: 1px solid #333; }
+        .cctv-header { padding: 12px; background: linear-gradient(90deg, #ff8c00, #ff0080); color: white; text-align: center; font-size: 18px; font-weight: 900; }
+        .cctv-content { display: flex; flex-direction: column; gap: 2px; background: #111; }
+        .video-container { width: 100%; aspect-ratio: 16/9; position: relative; background: #000; border-bottom: 1px solid #333; }
+        .tag { position: absolute; top: 10px; left: 10px; background: rgba(220,0,0,0.9); color: white; padding: 3px 8px; font-weight: bold; border-radius: 4px; font-size: 10px; z-index: 20; animation: blink 2s infinite; }
+        .label { position: absolute; bottom: 10px; left: 10px; text-shadow: 1px 1px 3px rgba(0,0,0,0.9); color: #fff; font-size: 14px; font-weight: 800; z-index: 10; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.7;} 100% {opacity: 1;} }
+
+        /* 날씨 카드 스타일 */
+        .weather-container { padding: 15px; display: flex; flex-direction: column; }
+        .w-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: #888; font-weight: 600; }
+        .w-title { font-size: 18px; font-weight: 900; color: #000; }
+        .w-content { display: flex; flex-direction: column; gap: 10px; }
+
+        .loc-card { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .loc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .loc-name { font-size: 16px; font-weight: 800; color: #333; }
+        .loc-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #fff2f1; color: #d93025; border: 1px solid #ffa39e; }
+
+        /* 가로 스크롤 영역 */
+        .w-grid {
+            display: flex; gap: 0; overflow-x: auto; padding-bottom: 5px;
+            scrollbar-width: none; -webkit-overflow-scrolling: touch;
+        }
+        .w-grid::-webkit-scrollbar { display: none; }
+
+        .w-col { display: flex; flex-direction: column; align-items: center; min-width: 50px; flex-shrink: 0; }
+        .f-time { font-size: 10px; color: #666; font-weight: 700; margin-bottom: 2px; }
+        .f-icon { font-size: 18px; margin-bottom: 2px; }
+        .f-temp { font-size: 12px; font-weight: 800; color: #000; }
+        .f-rain { font-size: 9px; color: #339af0; font-weight: 600; }
+
+        /* CORS 버튼 */
+        .cors-btn { display: block; width: 95%; margin: 0 auto 15px; padding: 10px; background: #ff4d4f; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-size: 12px; font-weight: bold; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% {transform: scale(0.98);} 50% {transform: scale(1.01);} 100% {transform: scale(0.98);} }
+
+        .footer-link { text-align: center; margin-top: 20px; font-size: 11px; color: #666; }
+    </style>
+</head>
+<body>
+    <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="cors-btn">⚠️ 1. 여기를 눌러서 [Request Access] 버튼 클릭!</a>
+
+    <div class="dashboard-container">
+        <div id="card-cctv" class="capture-card">
+            <div class="cctv-header">JEJU LIVE (CCTV)</div>
+            <div class="cctv-content">
+                <div class="video-container">
+                    <div class="tag">LIVE</div>
+                    <div class="label">🏝️ UDO (우도)</div>
+                    <video id="v1" autoplay muted playsinline></video>
+                </div>
+                <div class="video-container">
+                    <div class="tag">LIVE</div>
+                    <div class="label">🏔️ HALLA (한라산)</div>
+                    <video id="v2" autoplay muted playsinline></video>
+                </div>
+                <div class="video-container">
+                    <div class="tag">LIVE</div>
+                    <div class="label">🛣️ 1100 Road</div>
+                    <video id="v3" autoplay muted playsinline></video>
+                </div>
+            </div>
+        </div>
+
+        <div class="capture-card">
+            <div class="weather-container">
+                <div class="w-header"><span class="w-title">오늘 날씨 (Hourly)</span><span id="date-info">Loading..</span></div>
+                <div id="list-daily" class="w-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-link">Data: Korea Meteorological Administration</div>
+
+<script>
+    const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
+    const PROXY = 'https://cors-anywhere.herokuapp.com/';
+
+    function initCCTV() {
+        const streams = [
+            { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8' },
+            { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' },
+            { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8' }
+        ];
+        if (Hls.isSupported()) {
+            streams.forEach(s => {
+                const v = document.getElementById(s.id);
+                const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
+                h.on(Hls.Events.ERROR, function (event, data) { if (data.fatal) h.startLoad(); });
+            });
+        }
+    }
+
+    async function initWeather() {
+        const locs = [{n:"제주시",x:52,y:38}, {n:"서귀포",x:52,y:32}, {n:"한라산",x:52,y:35}, {n:"우도",x:60,y:38}];
+        const now = new Date();
+        const ymd = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+        document.getElementById('date-info').innerText = `${now.getMonth()+1}.${now.getDate()}`;
+
+        const baseTime = now.getHours() < 2 ? "2300" : "0200";
+        const baseDate = now.getHours() < 2 ? String(Number(ymd)-1) : ymd;
+
+        const container = document.getElementById('list-daily');
+        container.innerHTML = '';
+
+        for (const loc of locs) {
+            try {
+                // 줄바꿈 수정됨
+                const url = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=300&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
+                
+                const res = await fetch(url);
+                const json = await res.json();
+
+                let html = '';
+                json.response.body.items.item.forEach(i => {
+                    if (i.category === 'TMP' && i.fcstDate === ymd) {
+                        const h = i.fcstTime.substring(0,2);
+                        if (h >= "09" && h <= "22") {
+                            html += `<div class="w-col"><div class="f-time">${h}시</div><div class="f-icon">☀️</div><div class="f-temp">${i.fcstValue}°</div></div>`;
+                        }
+                    }
+                });
+                container.innerHTML += `<div class="loc-card"><div class="loc-header"><span class="loc-name">${loc.n}</span><span class="loc-badge">예보</span></div><div class="w-grid">${html || '데이터 준비중'}</div></div>`;
+            } catch(e) {
+                container.innerHTML += `<div class="loc-card" style="color:red;">${loc.n}: 로딩 실패 (CORS 버튼을 눌러주세요)</div>`;
+            }
+        }
+    }
+
+    initCCTV();
+    initWeather();
+</script>
+</body>
+</html>
