@@ -6,353 +6,209 @@
     <title>Jeju Mobile Weather</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
     <style>
-        /* 모바일 최적화된 CSS */
         body {
             margin: 0; padding: 10px; background-color: #222;
             display: flex; flex-direction: column; align-items: center;
-            font-family: 'Noto Sans SC', sans-serif; min-height: 100vh;
-            color: #333;
+            font-family: 'Noto Sans SC', sans-serif; min-height: 100vh; color: #333;
         }
         .dashboard-container {
-            display: flex; flex-direction: column; width: 100%; max-width: 600px; gap: 20px; padding-bottom: 30px;
+            display: flex; flex-direction: column; width: 100%; max-width: 600px; gap: 15px; padding-bottom: 30px;
         }
         .capture-card {
-            width: 100%; background: #fff; border-radius: 16px; overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+            width: 100%; background: #fff; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+            margin-bottom: 5px;
         }
 
-        /* CORS 버튼 */
-        .cors-alert {
-            width: 95%; max-width: 600px; background: #ff4d4f; color: white;
-            padding: 12px; margin-bottom: 20px; text-align: center; border-radius: 10px;
-            font-weight: bold; font-size: 13px; text-decoration: none; display: block;
-            animation: pulse 2s infinite;
+        /* 헤더 스타일 */
+        .card-header-top {
+            background: #eee; padding: 10px; font-weight: 800; font-size: 14px;
+            text-align: center; color: #555; border-bottom: 1px solid #ddd;
         }
-        @keyframes pulse { 0% {transform: scale(0.98);} 50% {transform: scale(1.02);} 100% {transform: scale(0.98);} }
 
-        /* CCTV 스타일 */
+        /* CCTV */
         #card-cctv { background: #000; border: 1px solid #333; }
-        .cctv-header { padding: 15px; background: linear-gradient(90deg, #ff8c00, #ff0080); color: white; text-align: center; font-size: 20px; font-weight: 900; }
-        .cctv-content { display: flex; flex-direction: column; gap: 2px; background: #111; }
-        .video-container { width: 100%; aspect-ratio: 16/9; position: relative; background: #000; border-bottom: 1px solid #333; }
-        .tag { position: absolute; top: 10px; left: 10px; background: rgba(220,0,0,0.9); color: white; padding: 4px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; z-index: 20; animation: blink 2s infinite; }
-        .label { position: absolute; bottom: 10px; left: 10px; text-shadow: 1px 1px 3px rgba(0,0,0,0.9); color: #fff; font-size: 16px; font-weight: 800; z-index: 10; }
+        .cctv-header { padding: 10px; background: linear-gradient(90deg, #d32f2f, #f57c00); color: white; text-align: center; font-size: 16px; font-weight: 900; }
+        .cctv-content { display: flex; flex-direction: column; gap: 1px; background: #111; }
+        .video-container { width: 100%; aspect-ratio: 16/9; position: relative; background: #000; }
+        .tag { position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 2px 6px; font-weight: bold; border-radius: 3px; font-size: 10px; z-index: 20; animation: blink 2s infinite; }
+        .label { position: absolute; bottom: 8px; left: 10px; text-shadow: 1px 1px 3px rgba(0,0,0,1); color: #fff; font-size: 14px; font-weight: 800; z-index: 10; }
         video { width: 100%; height: 100%; object-fit: cover; }
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.7;} 100% {opacity: 1;} }
 
-        /* 날씨 공통 스타일 */
-        .weather-container { padding: 20px 15px; display: flex; flex-direction: column; }
-        .w-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 14px; color: #888; font-weight: 600; }
-        .w-title { font-size: 20px; font-weight: 900; color: #000; }
-        .w-content { display: flex; flex-direction: column; gap: 12px; }
+        /* 날씨 그리드 (2줄 보기 핵심) */
+        .loc-section { padding: 15px 10px; border-bottom: 1px solid #eee; }
+        .loc-section:last-child { border-bottom: none; }
 
-        .loc-card { border: 1px solid #eee; border-radius: 12px; padding: 12px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .loc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .loc-name { font-size: 17px; font-weight: 800; color: #222; }
-        .loc-sub { font-size: 12px; color: #888; margin-left: 5px; }
-        .loc-badge { font-size: 11px; font-weight: 700; padding: 3px 6px; border-radius: 4px; background: #fff2f1; color: #d93025; border: 1px solid #ffa39e; }
+        .loc-title { font-size: 16px; font-weight: 900; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .badge { font-size: 10px; background: #e3f2fd; color: #1565c0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
-        /* 가로 스크롤 Grid */
         .w-grid {
-            display: flex; gap: 0; overflow-x: auto; padding-top: 5px; padding-bottom: 5px;
-            border-top: 1px solid #f1f3f5;
-            scrollbar-width: none; -webkit-overflow-scrolling: touch;
+            display: flex; flex-wrap: wrap; /* 자동 줄바꿈 */
+            justify-content: flex-start; gap: 0;
         }
-        .w-grid::-webkit-scrollbar { display: none; }
-
         .w-col {
-            display: flex; flex-direction: column; align-items: center; text-align: center;
-            min-width: 52px; flex-shrink: 0;
+            width: 14.2%; /* 한 줄에 7개 (100/7) */
+            display: flex; flex-direction: column; align-items: center;
+            margin-bottom: 10px; /* 줄 간격 */
         }
+        /* 주간예보는 한 줄에 4개씩 (25%) */
+        .weekly-grid .w-col { width: 25%; margin-bottom: 15px; }
 
-        .f-time { font-size: 11px; color: #666; font-weight: 700; margin-bottom: 3px; line-height: 1.2; }
-        .f-icon { font-size: 18px; margin-bottom: 2px; }
+        .f-time { font-size: 10px; color: #888; font-weight: 700; margin-bottom: 2px; }
+        .f-icon { font-size: 18px; margin-bottom: 0px; }
         .f-temp { font-size: 12px; font-weight: 800; color: #000; }
-        .f-rain { font-size: 9px; color: #888; font-weight: 500; }
-        .t-high { color: #ff4d4f; }
-        .t-low { color: #1a73e8; }
-        .pop-blue { color: #339af0; font-weight: 700; }
+        .f-rain { font-size: 9px; color: #1976d2; font-weight: 600; }
+        .t-high { color: #d32f2f; } .t-low { color: #1976d2; }
 
-        footer { text-align: center; margin-top: 10px; font-size: 11px; color: #ccc; }
+        /* CORS 버튼 */
+        .cors-btn { display: block; width: 96%; margin: 0 auto; padding: 10px; background: #ff4d4f; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="cors-alert">
-        ⚠️ 1. 여기를 눌러서 [Request temporary access] 버튼을 꼭 누르세요!<br>
-        (누른 뒤 뒤로가기 해서 새로고침 하세요)
-    </a>
+    <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="cors-btn">⚠️ 여기 눌러서 [Request Access] 활성화하기</a>
 
     <div class="dashboard-container">
+
         <div id="card-cctv" class="capture-card">
-            <div class="cctv-header">JEJU LIVE NOW 🔴</div>
+            <div class="cctv-header">🔴 JEJU LIVE CCTV</div>
             <div class="cctv-content">
-                <div class="video-container">
-                    <div class="tag">LIVE</div>
-                    <div class="label">🏝️ UDO (牛岛)</div>
-                    <video id="v1" autoplay muted playsinline></video>
-                </div>
-                <div class="video-container">
-                    <div class="tag">LIVE</div>
-                    <div class="label">🏔️ HALLA (汉拿山)</div>
-                    <video id="v2" autoplay muted playsinline></video>
-                </div>
-                <div class="video-container">
-                    <div class="tag">LIVE</div>
-                    <div class="label">🛣️ 1100 ROAD</div>
-                    <video id="v3" autoplay muted playsinline></video>
-                </div>
+                <div class="video-container"><div class="tag">LIVE</div><div class="label">🏝️ UDO (우도)</div><video id="v1" autoplay muted playsinline></video></div>
+                <div class="video-container"><div class="tag">LIVE</div><div class="label">🏔️ HALLA (한라산)</div><video id="v2" autoplay muted playsinline></video></div>
             </div>
         </div>
 
         <div class="capture-card">
-            <div class="weather-container">
-                <div class="w-header"><span class="w-title">今日天气 (Hourly)</span><span id="update-info-daily">Updating...</span></div>
-                <div id="list-daily" class="w-content"></div>
-                <footer>09:00 ~ 22:00 Forecast</footer>
-            </div>
+            <div class="card-header-top">☀️ 오늘 (주요 도심)</div>
+            <div id="daily-group-1">Loading...</div>
         </div>
 
         <div class="capture-card">
-            <div class="weather-container">
-                <div class="w-header">
-                    <span class="w-title">中长期预报 (10 Days)</span>
-                    <span id="update-info-weekly" style="font-size:11px; color:red;">Init...</span>
-                </div>
-                <div id="list-weekly" class="w-content">
-                    <div style="text-align:center; padding:20px; color:#999;">Waiting for Access...</div>
-                </div>
-            </div>
+            <div class="card-header-top">🏔️ 오늘 (관광지)</div>
+            <div id="daily-group-2">Loading...</div>
+        </div>
+
+        <div class="capture-card">
+            <div class="card-header-top">📅 주간 예보 (3일~10일후)</div>
+            <div id="weekly-list" style="padding:10px;">Loading...</div>
         </div>
     </div>
 
 <script>
-    // === 1. 설정 ===
     const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
     const PROXY = 'https://cors-anywhere.herokuapp.com/';
     const now = new Date();
+    const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
 
-    // 날짜 포맷 함수
-    function getFormatDate(date) {
-        const y = date.getFullYear();
-        const m = ('0' + (date.getMonth() + 1)).slice(-2);
-        const d = ('0' + date.getDate()).slice(-2);
-        return `${y}${m}${d}`;
-    }
-    const todayStr = getFormatDate(now);
-
-    // === 2. CCTV 기능 ===
     function initCCTV() {
         const streams = [
             { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8' },
-            { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' },
-            { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8' }
+            { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' }
         ];
         if (Hls.isSupported()) {
             streams.forEach(s => {
-                const video = document.getElementById(s.id);
-                const hls = new Hls();
-                hls.loadSource(s.url);
-                hls.attachMedia(video);
-                // 자동 재생 실패 시 재시도 로직
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
-                            case Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
-                            default: hls.destroy(); break;
-                        }
-                    }
-                });
+                const v = document.getElementById(s.id);
+                const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
+                h.on(Hls.Events.ERROR, function(e,d){ if(d.fatal) h.startLoad(); });
             });
         }
     }
 
-    // === 3. 오늘 날씨 (09~22시) ===
     async function initDailyWeather() {
-        const locations = [
-            { main: "济州市", sub: "Jeju", nx: 52, ny: 38 },
-            { main: "西归浦", sub: "Jungmun", nx: 52, ny: 32 },
-            { main: "汉拿山", sub: "Mt.Halla", nx: 52, ny: 35 },
-            { main: "牛岛", sub: "Udo", nx: 60, ny: 38 }
-        ];
+        // 그룹 1: 제주시, 서귀포
+        const locs1 = [{n:"제주시",x:52,y:38}, {n:"서귀포",x:52,y:32}];
+        // 그룹 2: 한라산, 우도
+        const locs2 = [{n:"한라산",x:52,y:35}, {n:"우도",x:60,y:38}];
 
-        let baseDate = todayStr;
-        let baseTime = "0200";
-        if (now.getHours() < 2) { // 새벽 2시 이전이면 어제 23시 데이터 사용
-            const yD = new Date(now); yD.setDate(now.getDate() - 1);
-            baseDate = getFormatDate(yD);
-            baseTime = "2300";
-        }
+        const baseTime = now.getHours() < 2 ? "2300" : "0200";
+        const baseDate = now.getHours() < 2 ? String(Number(todayStr)-1) : todayStr;
 
-        const listDiv = document.getElementById('list-daily');
-        listDiv.innerHTML = '';
-        document.getElementById('update-info-daily').innerText = `${now.getMonth()+1}.${now.getDate()}`;
+        async function fetchAndRender(locs, divId) {
+            const container = document.getElementById(divId);
+            container.innerHTML = '';
 
-        for (const loc of locations) {
-            let gridHtml = '';
-            try {
-                const url = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.nx}&ny=${loc.ny}`;
-                const res = await fetch(url);
-                const json = await res.json();
+            for (const loc of locs) {
+                let html = '';
+                try {
+                    const url = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=300&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
+                    const res = await fetch(url);
+                    const json = await res.json();
 
-                if(json.response.header.resultCode === '00'){
-                    const hourly = {};
-                    json.response.body.items.item.forEach(item => {
-                        if(item.fcstDate === todayStr) { // 오늘 날짜만
-                            const h = parseInt(item.fcstTime.slice(0,2));
-                            if(h >= 9 && h <= 22) { // 09시 ~ 22시 필터링
-                                if(!hourly[h]) hourly[h] = {};
-                                hourly[h][item.category] = item.fcstValue;
+                    json.response.body.items.item.forEach(i => {
+                        if (i.category === 'TMP' && i.fcstDate === todayStr) {
+                            const h = parseInt(i.fcstTime.substring(0,2));
+                            if (h >= 9 && h <= 22) { // 9시~22시 (14개 데이터 -> 7개씩 2줄)
+                                let icon = '☀️';
+                                html += `<div class="w-col"><div class="f-time">${h}시</div><div class="f-icon">${icon}</div><div class="f-temp">${i.fcstValue}°</div></div>`;
                             }
                         }
                     });
+                } catch(e) { html = '<div style="width:100%; text-align:center; color:red;">Connection Error</div>'; }
 
-                    // 9시부터 22시까지 순회
-                    for(let i=9; i<=22; i++){
-                        const d = hourly[i];
-                        if (d) {
-                            let icon = '☀️';
-                            const pty = parseInt(d.PTY||0), sky = parseInt(d.SKY||1);
-                            if(pty>0) icon = (pty===3)?'❄️':'🌧️'; else if(sky===3) icon='🌤️'; else if(sky===4) icon='☁️';
-                            if(i>=19 && (icon==='☀️'||icon==='🌤️')) icon='🌙';
-
-                            gridHtml += `<div class="w-col"><div class="f-time">${i}h</div><div class="f-icon">${icon}</div><div class="f-temp">${d.TMP||'-'}°</div><div class="f-rain">${d.POP||0}%</div></div>`;
-                        }
-                    }
-                }
-            } catch(e) { gridHtml = `<div style="padding:10px; font-size:12px; color:red;">Loading Failed (Check CORS Button)</div>`; }
-
-            listDiv.innerHTML += `<div class="loc-card"><div class="loc-header"><span class="loc-name">${loc.main}</span><span class="loc-sub">${loc.sub}</span></div><div class="w-grid">${gridHtml || 'No Data'}</div></div>`;
+                container.innerHTML += `
+                    <div class="loc-section">
+                        <div class="loc-title">${loc.n} <span class="badge">09~22시</span></div>
+                        <div class="w-grid">${html}</div>
+                    </div>`;
+            }
         }
+
+        await fetchAndRender(locs1, 'daily-group-1');
+        await fetchAndRender(locs2, 'daily-group-2');
     }
 
-    // === 4. 주간 날씨 (복구됨) ===
     async function initWeeklyWeather() {
-        const statusSpan = document.getElementById('update-info-weekly');
-        const listDiv = document.getElementById('list-weekly');
-        statusSpan.innerText = "Loading...";
+        const container = document.getElementById('weekly-list');
+        const locs = [{ name: "제주시", regIdTemp: '11G00201', regIdLand: '11G00000' }];
 
-        const locations = [
-            { name: "济州市", sub: "Jeju", regIdTemp: '11G00201', regIdLand: '11G00000', nx: 52, ny: 38 },
-            { name: "西归浦", sub: "Seogwipo", regIdTemp: '11G00401', regIdLand: '11G00000', nx: 52, ny: 32 },
-            { name: "汉拿山", sub: "Mt.Halla", regIdTemp: '11G00401', regIdLand: '11G00000', nx: 52, ny: 35 },
-            { name: "牛岛", sub: "Udo", regIdTemp: '11G00302', regIdLand: '11G00000', nx: 60, ny: 38 }
-        ];
-
-        // 중기예보 기준 시간 계산 (06시, 18시)
+        // 날짜 계산 로직 (오전/오후/NextDay)
         const h = now.getHours();
-        let midTmFc = `${todayStr}0600`;
-        if (h >= 18) midTmFc = `${todayStr}1800`;
-        else if (h < 6) {
+        let midTmFc, dayShift = 0;
+        if (h < 6) {
             const yD = new Date(now); yD.setDate(now.getDate() - 1);
-            midTmFc = `${getFormatDate(yD)}1800`;
-        }
+            midTmFc = `${yD.getFullYear()}${String(yD.getMonth()+1).padStart(2,'0')}${String(yD.getDate()).padStart(2,'0')}1800`;
+            dayShift = 1;
+        } else if (h >= 18) { midTmFc = `${todayStr}1800`; }
+        else { midTmFc = `${todayStr}0600`; }
 
-        // 단기예보 기준 (오늘~모레 데이터용)
-        let shortBaseDate = todayStr;
-        let shortBaseTime = "0200";
-        if (now.getHours() < 2) {
-            const yD = new Date(now); yD.setDate(now.getDate() - 1);
-            shortBaseDate = getFormatDate(yD);
-            shortBaseTime = "2300";
-        }
+        container.innerHTML = '';
 
-        let isFirst = true;
-
-        for (const loc of locations) {
-            let combinedData = {};
-
-            // A. 단기예보 (0~2일)
-            try {
-                const urlS = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`;
-                const resS = await fetch(urlS);
-                const jsonS = await resS.json();
-
-                if(jsonS.response.header.resultCode === '00'){
-                    const tempDays = {};
-                    jsonS.response.body.items.item.forEach(it => {
-                        const date = it.fcstDate;
-                        if(!tempDays[date]) tempDays[date] = { min:100, max:-100, sky:1, pty:0, temps:[], pop:0 };
-                        if(it.category==='TMN') tempDays[date].min = parseFloat(it.fcstValue);
-                        if(it.category==='TMX') tempDays[date].max = parseFloat(it.fcstValue);
-                        if(it.category==='TMP') tempDays[date].temps.push(parseFloat(it.fcstValue));
-                        if(it.category==='POP') tempDays[date].pop = Math.max(tempDays[date].pop, parseInt(it.fcstValue));
-                        if(it.category==='PTY') tempDays[date].pty = Math.max(tempDays[date].pty, parseInt(it.fcstValue));
-                        if(it.category==='SKY') tempDays[date].sky = parseInt(it.fcstValue);
-                    });
-
-                    for(let i=0; i<=2; i++){
-                        const d = new Date(now); d.setDate(now.getDate() + i);
-                        const dStr = getFormatDate(d);
-                        const t = tempDays[dStr];
-                        if(t) {
-                            if(t.min===100 && t.temps.length>0) t.min = Math.min(...t.temps);
-                            if(t.max===-100 && t.temps.length>0) t.max = Math.max(...t.temps);
-                            let wf = "맑음";
-                            if(t.pty>0) wf = (t.pty===3)?"눈":"비"; else if(t.sky>5) wf="흐림"; else if(t.sky>8) wf="구름많음";
-                            combinedData[i] = { min: t.min, max: t.max, wf: wf, pop: t.pop };
-                        }
-                    }
-                }
-            } catch(e) {}
-
-            // B. 중기예보 (3~10일)
+        for (const loc of locs) {
             try {
                 const urlT = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
-                const resT = await fetch(urlT);
-                const jsonT = await resT.json();
-
+                const resT = await fetch(urlT); const jsonT = await resT.json();
                 const urlL = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
-                const resL = await fetch(urlL);
-                const jsonL = await resL.json();
+                const resL = await fetch(urlL); const jsonL = await resL.json();
 
-                if(jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
-                    const tItem = jsonT.response.body.items.item[0];
-                    const lItem = jsonL.response.body.items.item[0];
+                if(jsonT.response.header.resultCode === '00') {
+                    const t = jsonT.response.body.items.item[0];
+                    const l = jsonL.response.body.items.item[0];
+                    let html = '';
+
                     for(let i=3; i<=10; i++) {
-                        combinedData[i] = {
-                            min: tItem[`taMin${i}`], max: tItem[`taMax${i}`],
-                            wf: lItem[`wf${i}Pm`] || lItem[`wf${i}`],
-                            pop: lItem[`rnSt${i}Pm`] || lItem[`rnSt${i}`]
-                        };
+                        const k = i + dayShift; if(k>10) continue;
+                        const d = new Date(now); d.setDate(now.getDate() + i);
+                        const label = `${d.getMonth()+1}/${d.getDate()}`;
+
+                        let wf = (k<=7) ? (l[`wf${k}Pm`]||l[`wf${k}`]) : l[`wf${k}`];
+                        let icon = '☀️';
+                        if(wf && wf.includes('비')) icon='🌧️'; else if(wf && wf.includes('구름')) icon='☁️';
+
+                        const min = t[`taMin${k}`]||t[`taMin${k}Low`];
+                        const max = t[`taMax${k}`]||t[`taMax${k}High`];
+
+                        html += `<div class="w-col"><div class="f-time">${label}</div><div class="f-icon">${icon}</div><div class="f-temp"><span class="t-high">${max}</span>/<span class="t-low">${min}</span></div></div>`;
                     }
+                    container.innerHTML += `<div class="loc-section"><div class="loc-title">제주 전역 <span class="badge">3일~10일후</span></div><div class="w-grid weekly-grid">${html}</div></div>`;
                 }
             } catch(e) {}
-
-            if(isFirst) { listDiv.innerHTML = ''; isFirst = false; }
-
-            // C. 렌더링
-            let gridHtml = '';
-            for(let i=0; i<=10; i++) {
-                const w = combinedData[i];
-                if(w) {
-                    const d = new Date(now); d.setDate(now.getDate() + i);
-                    const label = (i===0) ? "Today" : `${d.getMonth()+1}/${d.getDate()}`;
-
-                    let icon = '☀️';
-                    if(w.wf && (w.wf.includes('흐림')||w.wf.includes('구름'))) icon = '☁️';
-                    if(w.wf && (w.wf.includes('비')||w.wf.includes('소나기'))) icon = '🌧️';
-                    if(w.wf && w.wf.includes('눈')) icon = '❄️';
-
-                    gridHtml += `
-                    <div class="w-col">
-                        <div class="f-time">${label}</div>
-                        <div class="f-icon">${icon}</div>
-                        <div class="f-temp"><span class="t-high">${w.max||'-'}</span>/<span class="t-low">${w.min||'-'}</span></div>
-                        <div class="f-rain pop-blue">${w.pop||0}%</div>
-                    </div>`;
-                }
-            }
-            listDiv.innerHTML += `<div class="loc-card"><div class="loc-header"><span class="loc-name">${loc.name}</span><span class="loc-sub" style="font-size:10px;">${loc.sub}</span></div><div class="w-grid">${gridHtml || 'No Data (Check CORS)'}</div></div>`;
         }
-        statusSpan.innerText = "Updated";
     }
 
     initCCTV();
     initDailyWeather();
-    setTimeout(initWeeklyWeather, 1000); // 1초 뒤 주간예보 실행
+    setTimeout(initWeeklyWeather, 1000);
 </script>
 </body>
 </html>
