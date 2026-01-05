@@ -1,210 +1,239 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Jeju Mobile Weather</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        body {
-            margin: 0; padding: 10px; background-color: #222;
-            display: flex; flex-direction: column; align-items: center;
-            font-family: 'Noto Sans SC', sans-serif; min-height: 100vh; color: #333;
-        }
-        .dashboard-container {
-            display: flex; flex-direction: column; width: 100%; max-width: 600px; gap: 15px; padding-bottom: 30px;
-        }
-        .capture-card {
-            width: 100%; background: #fff; border-radius: 12px; overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; flex-direction: column;
-            margin-bottom: 5px;
-        }
-        .card-header-top {
-            background: #eee; padding: 10px; font-weight: 800; font-size: 14px;
-            text-align: center; color: #555; border-bottom: 1px solid #ddd;
-        }
-        #card-cctv { background: #000; border: 1px solid #333; }
-        .cctv-header { padding: 10px; background: linear-gradient(90deg, #d32f2f, #f57c00); color: white; text-align: center; font-size: 16px; font-weight: 900; }
-        .cctv-content { display: flex; flex-direction: column; gap: 1px; background: #111; }
-        .video-container { width: 100%; aspect-ratio: 16/9; position: relative; background: #000; }
-        .tag { position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 2px 6px; font-weight: bold; border-radius: 3px; font-size: 10px; z-index: 20; animation: blink 2s infinite; }
-        .label { position: absolute; bottom: 8px; left: 10px; text-shadow: 1px 1px 3px rgba(0,0,0,1); color: #fff; font-size: 14px; font-weight: 800; z-index: 10; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.7;} 100% {opacity: 1;} }
-
-        .loc-section { padding: 15px 10px; border-bottom: 1px solid #eee; }
-        .loc-section:last-child { border-bottom: none; }
-        .loc-title { font-size: 16px; font-weight: 900; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .badge { font-size: 10px; background: #e3f2fd; color: #1565c0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-
-        .w-grid { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 0; }
-        .w-col {
-            width: 14.2%; display: flex; flex-direction: column; align-items: center;
-            margin-bottom: 10px;
-        }
-        .weekly-grid .w-col { width: 25%; margin-bottom: 15px; }
-
-        .f-time { font-size: 10px; color: #888; font-weight: 700; margin-bottom: 2px; }
-        .f-icon { font-size: 18px; margin-bottom: 0px; }
-        .f-temp { font-size: 12px; font-weight: 800; color: #000; margin-bottom: 1px; }
-        .f-wind { font-size: 9px; color: #1565c0; font-weight: 600; transform: scale(0.9); } /* 풍속 추가 */
-        .t-high { color: #d32f2f; } .t-low { color: #1976d2; }
-    </style>
-</head>
-<body>
-    <div class="dashboard-container">
-        <div id="card-cctv" class="capture-card">
-            <div class="cctv-header">🔴 JEJU LIVE CCTV</div>
-            <div class="cctv-content">
-                <div class="video-container"><div class="tag">LIVE</div><div class="label">🏝️ UDO (우도)</div><video id="v1" autoplay muted playsinline></video></div>
-                <div class="video-container"><div class="tag">LIVE</div><div class="label">🏔️ HALLA (한라산)</div><video id="v2" autoplay muted playsinline></video></div>
-                <div class="video-container"><div class="tag">LIVE</div><div class="label">🛣️ 1100 ROAD</div><video id="v3" autoplay muted playsinline></video></div>
-            </div>
-        </div>
-
-        <div class="capture-card">
-            <div class="card-header-top">☀️ 오늘 (주요 도심)</div>
-            <div id="daily-group-1" style="min-height:100px; display:flex; justify-content:center; align-items:center;">Loading...</div>
-        </div>
-
-        <div class="capture-card">
-            <div class="card-header-top">🏔️ 오늘 (관광지)</div>
-            <div id="daily-group-2" style="min-height:100px; display:flex; justify-content:center; align-items:center;">Loading...</div>
-        </div>
-
-        <div class="capture-card">
-            <div class="card-header-top">📅 주간 예보 (3일~10일후)</div>
-            <div id="weekly-list" style="padding:10px; min-height:100px;">Loading...</div>
-        </div>
-    </div>
-
-<script>
-    const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
-    // 프록시 변경 (안정성 확보)
-    const PROXY = 'https://api.allorigins.win/raw?url=';
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-
-    function initCCTV() {
-        const streams = [
-            { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8' },
-            { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' },
-            { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8' }
-        ];
-        if (Hls.isSupported()) {
-            streams.forEach(s => {
-                const v = document.getElementById(s.id);
-                const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
-                h.on(Hls.Events.ERROR, function(e,d){ if(d.fatal) h.startLoad(); });
-            });
-        }
-    }
-
-    async function initDailyWeather() {
-        const locs1 = [{n:"제주시",x:52,y:38}, {n:"서귀포",x:52,y:32}];
-        const locs2 = [{n:"한라산",x:52,y:35}, {n:"우도",x:60,y:38}];
-        const baseTime = now.getHours() < 2 ? "2300" : "0200";
-        const baseDate = now.getHours() < 2 ? String(Number(todayStr)-1) : todayStr;
-
-        async function fetchAndRender(locs, divId) {
-            const container = document.getElementById(divId);
-            container.innerHTML = '';
-
-            for (const loc of locs) {
-                let html = '';
-                try {
-                    // encodeURIComponent로 URL 감싸기 (새 프록시 규칙)
-                    const targetUrl = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=300&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
-                    const res = await fetch(PROXY + encodeURIComponent(targetUrl));
-                    const json = await res.json();
-
-                    const hourly = {};
-                    json.response.body.items.item.forEach(i => {
-                        if (i.fcstDate === todayStr) {
-                            const h = parseInt(i.fcstTime.slice(0,2));
-                            if (h >= 9 && h <= 22) {
-                                if(!hourly[h]) hourly[h] = {};
-                                hourly[h][i.category] = i.fcstValue;
-                            }
-                        }
-                    });
-
-                    for(let h=9; h<=22; h++) {
-                        const d = hourly[h];
-                        if(d) {
-                            let icon = '☀️';
-                            const pty = parseInt(d.PTY||0), sky = parseInt(d.SKY||1);
-                            if(pty>0) icon=(pty===3)?'❄️':'🌧️'; else if(sky>5) icon='☁️'; else if(sky>8) icon='⛅';
-
-                            // 풍속(WSD) 추가
-                            html += `<div class="w-col">
-                                <div class="f-time">${h}시</div>
-                                <div class="f-icon">${icon}</div>
-                                <div class="f-temp">${d.TMP}°</div>
-                                <div class="f-wind">${d.WSD}m/s</div>
-                            </div>`;
-                        }
-                    }
-                } catch(e) { html = '<div style="color:red; font-size:12px;">Data Error</div>'; }
-
-                container.innerHTML += `<div class="loc-section"><div class="loc-title">${loc.n} <span class="badge">09~22시</span></div><div class="w-grid">${html}</div></div>`;
-            }
-        }
-        await fetchAndRender(locs1, 'daily-group-1');
-        await fetchAndRender(locs2, 'daily-group-2');
-    }
-
-    async function initWeeklyWeather() {
-        const container = document.getElementById('weekly-list');
-        const locs = [{ name: "제주시", regIdTemp: '11G00201', regIdLand: '11G00000' }];
-
-        const h = now.getHours();
-        let midTmFc, dayShift = 0;
-        if (h < 6) {
-            const yD = new Date(now); yD.setDate(now.getDate() - 1);
-            midTmFc = `${yD.getFullYear()}${String(yD.getMonth()+1).padStart(2,'0')}${String(yD.getDate()).padStart(2,'0')}1800`;
-            dayShift = 1;
-        } else if (h >= 18) { midTmFc = `${todayStr}1800`; }
-        else { midTmFc = `${todayStr}0600`; }
-
-        container.innerHTML = '';
-        for (const loc of locs) {
-            try {
-                const urlT = `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
-                const resT = await fetch(PROXY + encodeURIComponent(urlT)); const jsonT = await resT.json();
-
-                const urlL = `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
-                const resL = await fetch(PROXY + encodeURIComponent(urlL)); const jsonL = await resL.json();
-
-                if(jsonT.response.header.resultCode === '00') {
-                    const t = jsonT.response.body.items.item[0];
-                    const l = jsonL.response.body.items.item[0];
-                    let html = '';
-
-                    for(let i=3; i<=10; i++) {
-                        const k = i + dayShift; if(k>10) continue;
-                        const d = new Date(now); d.setDate(now.getDate() + i);
-                        const label = `${d.getMonth()+1}/${d.getDate()}`;
-
-                        let wf = (k<=7) ? (l[`wf${k}Pm`]||l[`wf${k}`]) : l[`wf${k}`];
-                        let icon = '☀️';
-                        if(wf && wf.includes('비')) icon='🌧️'; else if(wf && wf.includes('구름')) icon='☁️';
-
-                        const min = t[`taMin${k}`]||t[`taMin${k}Low`];
-                        const max = t[`taMax${k}`]||t[`taMax${k}High`];
-
-                        html += `<div class="w-col"><div class="f-time">${label}</div><div class="f-icon">${icon}</div><div class="f-temp"><span class="t-high">${max}</span>/<span class="t-low">${min}</span></div></div>`;
-                    }
-                    container.innerHTML += `<div class="loc-section"><div class="loc-title">제주 전역 <span class="badge">3일~10일후</span></div><div class="w-grid weekly-grid">${html}</div></div>`;
-                }
-            } catch(e) {}
-        }
-    }
-
-    initCCTV();
-    initDailyWeather();
-    setTimeout(initWeeklyWeather, 1500);
-</script>
-</body>
-</html>
+     1 <!DOCTYPE html>
+     2 <html lang="zh-CN">
+     3 <head>
+     4     <meta charset="UTF-8">
+     5     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+     6     <title>济州岛天气 - 莲洞/中文</title>
+     7     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+     8     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+     9     <style>
+    10         body {
+    11             margin: 0; padding: 10px; background-color: #f0f2f5;
+    12             display: flex; flex-direction: column; align-items: center;
+    13             font-family: 'Noto Sans SC', sans-serif; min-height: 100vh; color: #333;
+    14         }
+    15         .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 40px; }
+    16         .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    17         .card-header {
+    18             background: #fff; padding: 12px 15px; border-bottom: 1px solid #eee;
+    19             font-weight: 800; font-size: 16px; color: #1a1a1a; display: flex; justify-content: space-between; align-items: center;
+    20         }
+    21         .badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: #e8f5e9; color: #2e7d32; font-weight: bold; }
+    22
+    23         /* CCTV Section */
+    24         .video-box { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-bottom: 1px solid #222; }
+    25         .live-tag { position: absolute; top: 10px; left: 10px; background: #ff5252; color: white; padding: 2px 6px; font-size: 10px;
+       border-radius: 3px; z-index: 10; animation: blink 1.5s infinite; font-weight: bold; }
+    26         .vid-label { position: absolute; bottom: 8px; left: 10px; color: white; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 4px
+       rgba(0,0,0,0.8); z-index: 10; }
+    27         video { width: 100%; height: 100%; object-fit: cover; }
+    28         @keyframes blink { 0%, 100% {opacity: 1;} 50% {opacity: 0.6;} }
+    29
+    30         /* Weather Section */
+    31         .weather-section { padding: 15px; border-bottom: 8px solid #f0f2f5; }
+    32         .weather-section:last-child { border-bottom: none; }
+    33         .loc-info { margin-bottom: 12px; }
+    34         .loc-name { font-size: 18px; font-weight: 900; color: #1a1a1a; }
+    35         .loc-sub { font-size: 12px; color: #666; margin-left: 5px; font-weight: 500; }
+    36
+    37         .grid { display: flex; flex-wrap: wrap; gap: 0; }
+    38         .col {
+    39             width: 14.28%; display: flex; flex-direction: column; align-items: center; margin-bottom: 12px;
+    40         }
+    41         /* Weekly 4 per row */
+    42         .weekly-grid .col { width: 25%; margin-bottom: 18px; }
+    43
+    44         .time { font-size: 11px; color: #757575; font-weight: bold; margin-bottom: 3px; }
+    45         .icon { font-size: 22px; margin-bottom: 2px; }
+    46         .temp { font-size: 14px; font-weight: 900; color: #212121; }
+    47         .wind { font-size: 9px; color: #0288d1; font-weight: 600; margin-top: 1px; }
+    48         .rain { font-size: 10px; color: #546e7a; font-weight: 500; }
+    49
+    50         .high { color: #d32f2f; } .low { color: #1976d2; }
+    51         .rain-blue { color: #1e88e5; font-weight: bold; }
+    52
+    53         footer { text-align: center; padding: 20px; font-size: 11px; color: #999; }
+    54     </style>
+    55 </head>
+    56 <body>
+    57     <div class="container">
+    58         <!-- CCTV 实황 -->
+    59         <div class="card" style="background:#000;">
+    60             <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
+    61             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay
+       muted playsinline></video></div>
+    62             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2"
+       autoplay muted playsinline></video></div>
+    63             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高지道路 (雪景)</div><video id="v3" autoplay
+       muted playsinline></video></div>
+    64         </div>
+    65
+    66         <!-- 今日天气 -->
+    67         <div class="card">
+    68             <div class="card-header">☀️ 今日逐时预报 (09:00 - 22:00) <span class="badge" id="date-label"></span></div>
+    69             <div id="daily-list">
+    70                 <div style="padding:40px; text-align:center; color:#999; font-size:14px;">正在获取实时天气数据...</div>
+    71             </div>
+    72         </div>
+    73
+    74         <!-- 未来预报 -->
+    75         <div class="card">
+    76             <div class="card-header">📅 未来10天长期预报</div>
+    77             <div id="weekly-list">
+    78                 <div style="padding:40px; text-align:center; color:#999; font-size:14px;">正在获取长期预报数据...</div>
+    79             </div>
+    80         </div>
+    81
+    82         <footer>Data provided by Korea Meteorological Administration</footer>
+    83     </div>
+    84
+    85 <script>
+    86     const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
+    87     const PROXY = 'https://api.allorigins.win/raw?url=';
+    88     const now = new Date();
+    89     const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    90     document.getElementById('date-label').innerText = `${now.getMonth()+1}月${now.getDate()}일`;
+    91
+    92     function initCCTV() {
+    93         const streams = [
+    94             { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8' },
+    95             { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' },
+    96             { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8' }
+    97         ];
+    98         if (Hls.isSupported()) {
+    99             streams.forEach(s => {
+   100                 const v = document.getElementById(s.id);
+   101                 const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
+   102                 h.on(Hls.Events.ERROR, function(e,d){ if(d.fatal) h.startLoad(); });
+   103             });
+   104         }
+   105     }
+   106
+   107     async function initDaily() {
+   108         const locs = [
+   109             {n:"济州市 (莲洞)", sub:"Yeon-dong", x:52, y:38},
+   110             {n:"西归浦 (中文)", sub:"Jungmun", x:52, y:32},
+   111             {n:"汉拿山", sub:"Mt.Halla", x:52, y:35},
+   112             {n:"牛岛", sub:"Udo Island", x:60, y:38}
+   113         ];
+   114         const baseTime = now.getHours() < 2 ? "2300" : "0200";
+   115         const baseDate = now.getHours() < 2 ? String(Number(todayStr)-1) : todayStr;
+   116         const container = document.getElementById('daily-list');
+   117         container.innerHTML = '';
+   118
+   119         for (const loc of locs) {
+   120             try {
+   121                 const url =
+       `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=400&pageNo=1&dataType=JSON&base_date
+       {baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
+   122                 const res = await fetch(PROXY + encodeURIComponent(url));
+   123                 const json = await res.json();
+   124
+   125                 const hourly = {};
+   126                 json.response.body.items.item.forEach(i => {
+   127                     if (i.fcstDate === todayStr) {
+   128                         const h = parseInt(i.fcstTime.slice(0,2));
+   129                         if(h>=9 && h<=22) {
+   130                             if(!hourly[h]) hourly[h] = {};
+   131                             hourly[h][i.category] = i.fcstValue;
+   132                         }
+   133                     }
+   134                 });
+   135
+   136                 let html = '';
+   137                 for(let h=9; h<=22; h++) {
+   138                     const d = hourly[h];
+   139                     if(d) {
+   140                         let icon = '☀️';
+   141                         const pty=parseInt(d.PTY||0), sky=parseInt(d.SKY||1);
+   142                         if(pty>0) icon=(pty===3)?'❄️':'🌧️'; else if(sky>8) icon='☁️'; else if(sky>5) icon='⛅';
+   143                         if(h>=19 && (icon==='☀️'||icon==='⛅')) icon='🌙';
+   144                         const pop = d.POP || 0;
+   145                         html += `<div class="col">
+   146                             <div class="time">${h}时</div>
+   147                             <div class="icon">${icon}</div>
+   148                             <div class="temp">${d.TMP}°</div>
+   149                             <div class="wind">${d.WSD}m/s</div>
+   150                             <div class="rain ${pop>0?'rain-blue':''}">${pop}%</div>
+   151                         </div>`;
+   152                     }
+   153                 }
+   154                 container.innerHTML += `<div class="weather-section">
+   155                     <div class="loc-info"><span class="loc-name">${loc.n}</span><span class="loc-sub">${loc.sub}</span></div>
+   156                     <div class="grid">${html}</div>
+   157                 </div>`;
+   158             } catch(e) { }
+   159         }
+   160     }
+   161
+   162     async function initWeekly() {
+   163         const container = document.getElementById('weekly-list');
+   164         const locs = [
+   165             { name: "济州市", sub: "Jeju City", regIdTemp: '11G00201', regIdLand: '11G00000' },
+   166             { name: "西归浦", sub: "Seogwipo", regIdTemp: '11G00401', regIdLand: '11G00000' }
+   167         ];
+   168
+   169         const h = now.getHours();
+   170         let midTmFc, dayShift = 0;
+   171         if (h < 6) {
+   172              const yD = new Date(now); yD.setDate(now.getDate() - 1);
+   173              midTmFc = `${yD.getFullYear()}${String(yD.getMonth()+1).padStart(2,'0')}${String(yD.getDate()).padStart(2,'0')}1800`;
+   174              dayShift = 1;
+   175         } else if (h >= 18) { midTmFc = `${todayStr}1800`; }
+   176         else { midTmFc = `${todayStr}0600`; }
+   177
+   178         container.innerHTML = '';
+   179
+   180         for (const loc of locs) {
+   181             try {
+   182                 const urlT =
+       `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&
+       Fc=${midTmFc}`;
+   183                 const resT = await fetch(PROXY + encodeURIComponent(urlT)); const jsonT = await resT.json();
+   184                 const urlL =
+       `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regId
+       nd}&tmFc=${midTmFc}`;
+   185                 const resL = await fetch(PROXY + encodeURIComponent(urlL)); const jsonL = await resL.json();
+   186
+   187                 if(jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
+   188                     const t = jsonT.response.body.items.item[0];
+   189                     const l = jsonL.response.body.items.item[0];
+   190                     let html = '';
+   191
+   192                     for(let i=3; i<=10; i++) {
+   193                         const k = i + dayShift; if(k>10) continue;
+   194                         const d = new Date(now); d.setDate(now.getDate() + i);
+   195                         const label = `${d.getMonth()+1}/${d.getDate()}`;
+   196
+   197                         let wf = (k<=7) ? (l[`wf${k}Pm`]||l[`wf${k}`]) : l[`wf${k}`];
+   198                         let icon = '☀️';
+   199                         if(wf.includes('흐림')) icon='☁️';
+   200                         else if(wf.includes('구름')) icon='⛅';
+   201                         else if(wf.includes('비')) icon='🌧️';
+   202
+   203                         const min = t[`taMin${k}`]||t[`taMin${k}Low`]||'-';
+   204                         const max = t[`taMax${k}`]||t[`taMax${k}High`]||'-';
+   205                         const pop = (k<=7) ? (l[`rnSt${k}Pm`]||l[`rnSt${k}`]) : l[`rnSt${k}`];
+   206
+   207                         html += `<div class="col">
+   208                             <div class="time">${label}</div>
+   209                             <div class="icon">${icon}</div>
+   210                             <div class="temp"><span class="high">${max}</span>/<span class="low">${min}</span></div>
+   211                             <div class="rain rain-blue">${pop}%</div>
+   212                         </div>`;
+   213                     }
+   214                     container.innerHTML += `<div class="weather-section">
+   215                         <div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div>
+   216                         <div class="grid weekly-grid">${html}</div>
+   217                     </div>`;
+   218                 }
+   219             } catch(e) { }
+   220         }
+   221     }
+   222
+   223     initCCTV();
+   224     initDaily();
+   225     setTimeout(initWeekly, 2000);
+   226 </script>
+   227 </body>
+   228 </html>
