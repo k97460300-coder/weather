@@ -1,0 +1,166 @@
+  1 <!DOCTYPE html>
+     2 <html lang="zh-CN">
+     3 <head>
+     4     <meta charset="UTF-8">
+     5     <meta name="viewport" content="width=device-width,
+       initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+     6     <title>Jeju Mobile Weather</title>
+     7     <link href=
+       "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;5
+       ;700;900&display=swap" rel="stylesheet">
+     8     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></
+       script>
+     9     <style>
+    10         body { margin: 0; padding: 10px; background-color: #12121
+       display: flex; flex-direction: column; align-items: center;
+       font-family: 'Noto Sans SC', sans-serif; min-height: 100vh; color
+       #fff; }
+    11         .container { width: 100%; max-width: 600px; display: flex
+       flex-direction: column; gap: 15px; padding-bottom: 50px; }
+    12         .card { background: #1e1e1e; border-radius: 12px; overflo
+       hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    13         .card-header { padding: 12px 15px; background: #2c2c2c;
+       font-weight: bold; font-size: 16px; color: #eee; display: flex;
+       justify-content: space-between; align-items: center; }
+    14         .video-box { position: relative; width: 100%; padding-top
+       56.25%; background: black; border-bottom: 1px solid #333; }
+    15         .video-box video { position: absolute; top: 0; left: 0;
+       width: 100%; height: 100%; object-fit: cover; }
+    16         .video-label { position: absolute; bottom: 8px; left: 8px
+       background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px
+       font-size: 12px; font-weight: bold; }
+    17         .live-tag { position: absolute; top: 8px; left: 8px;
+       background: red; padding: 2px 6px; border-radius: 4px; font-size:
+       10px; font-weight: bold; animation: blink 1.5s infinite; }
+    18         @keyframes blink { 0% {opacity:1} 50% {opacity:0.5} 100%
+       {opacity:1} }
+    19
+    20         .cors-btn { background: #d32f2f; color: white; padding:
+       10px; text-align: center; border-radius: 8px; text-decoration:
+       none; font-size: 13px; font-weight: bold; display: block;
+       animation: pulse 2s infinite; }
+    21         @keyframes pulse { 0% {transform: scale(0.98);} 50%
+       {transform: scale(1.02);} 100% {transform: scale(0.98);} }
+    22
+    23         .weather-row { display: flex; overflow-x: auto; padding:
+       15px; gap: 0; scrollbar-width: none; -webkit-overflow-scrolling:
+       touch; }
+    24         .weather-row::-webkit-scrollbar { display: none; }
+    25         .w-item { min-width: 55px; display: flex; flex-direction:
+       column; align-items: center; text-align: center; flex-shrink: 0;
+    26         .w-time { font-size: 11px; color: #aaa; margin-bottom: 4p
+       }
+    27         .w-icon { font-size: 20px; margin-bottom: 2px; }
+    28         .w-temp { font-size: 13px; font-weight: bold; }
+    29         .w-rain { font-size: 10px; color: #4fc3f7; }
+    30
+    31         .loc-title { padding: 10px 15px 0; font-size: 14px;
+       font-weight: bold; color: #ddd; display: flex; align-items: cente
+       gap: 5px; }
+    32         .loc-badge { font-size: 10px; background: #333; padding:
+       2px 6px; border-radius: 4px; color: #aaa; }
+    33     </style>
+    34 </head>
+    35 <body>
+    36     <div class="container">
+    37         <a href="https://cors-anywhere.herokuapp.com/corsdemo"
+       target="_blank" class="cors-btn">⚠️ Tap here first [Request Acces
+       </a>
+    38
+    39         <div class="card">
+    40             <div class="card-header">🔴 Jeju Live Cam</div>
+    41             <div class="video-box"><div class="live-tag">LIVE</di
+       <div class="video-label">🏝️ UDO Island</div><video id="v1" autopl
+       muted playsinline></video></div>
+    42             <div class="video-box"><div class="live-tag">LIVE</di
+       <div class="video-label">🏔️ Mt. Halla</div><video id="v2" autopla
+       muted playsinline></video></div>
+    43         </div>
+    44
+    45         <div class="card" id="weather-list">
+    46             <div class="card-header">☀️ Today's Forecast</div>
+    47             <!-- Weather content will be loaded here -->
+    48         </div>
+    49     </div>
+    50
+    51 <script>
+    52     const API_KEY =
+       '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce
+    53     const PROXY = 'https://cors-anywhere.herokuapp.com/';
+    54
+    55     function initCCTV() {
+    56         const streams = [
+    57             { id: 'v1', url:
+       'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w15148
+       533.m3u8' },
+    58             { id: 'v2', url:
+       'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w32
+       17178.m3u8' }
+    59         ];
+    60         if (Hls.isSupported()) {
+    61             streams.forEach(s => {
+    62                 const v = document.getElementById(s.id);
+    63                 const h = new Hls(); h.loadSource(s.url);
+       h.attachMedia(v);
+    64             });
+    65         }
+    66     }
+    67
+    68     async function initWeather() {
+    69         const locs = [{n:'Jeju City',x:52,y:38},
+       {n:'Seogwipo',x:52,y:32}, {n:'Mt.Halla',x:52,y:35}];
+    70         const now = new Date();
+    71         const ymd =
+       `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}$
+       tring(now.getDate()).padStart(2,'0')}`;
+    72         const baseTime = now.getHours() < 2 ? "2300" : "0200";
+    73         const baseDate = now.getHours() < 2 ? String(Number(ymd)-
+       : ymd;
+    74
+    75         const container = document.getElementById('weather-list')
+    76
+    77         for(const loc of locs) {
+    78             let html = `<div class="loc-title">📍 ${loc.n}</div><
+       div class="weather-row">`;
+    79             try {
+    80                 const url =
+       `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.
+       getVilageFcst?serviceKey=${API_KEY}&numOfRows=300&pageNo=1&dataTy
+       =JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=
+       loc.y}`;
+    81                 const res = await fetch(url);
+    82                 const json = await res.json();
+    83
+    84                 const hourly = {};
+    85                 json.response.body.items.item.forEach(i => {
+    86                     if(i.fcstDate === ymd && i.fcstTime >= "0900"
+       && i.fcstTime <= "2100") {
+    87                         const t = i.fcstTime.substring(0,2);
+    88                         if(!hourly[t]) hourly[t] = {};
+    89                         hourly[t][i.category] = i.fcstValue;
+    90                     }
+    91                 });
+    92
+    93                 Object.keys(hourly).sort().forEach(t => {
+    94                     const d = hourly[t];
+    95                     let icon = '☀️';
+    96                     if(d.PTY > 0) icon = d.PTY == 3 ? '❄️' : '🌧️'
+       else if(d.SKY > 8) icon = '☁️'; else if(d.SKY > 5) icon = '⛅';
+    97                     html += `<div class="w-item"><div class=
+       "w-time">${t}h</div><div class="w-icon">${icon}</div><div class=
+       "w-temp">${d.TMP}°</div><div class="w-rain">${d.POP}%</div></div>
+    98                 });
+    99             } catch(e) { html += `<div style="padding:10px;
+       font-size:12px; color:red;">Loading Failed (Check CORS)</div>`; }
+   100             html += `</div><hr style="border:0; border-top:1px
+       solid #333; margin:0;">`;
+   101             container.innerHTML += html;
+   102         }
+   103     }
+   104
+   105     initCCTV();
+   106     initWeather();
+   107 </script>
+   108 </body>
+   109 </html>
+  </details>
