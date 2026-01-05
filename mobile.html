@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>济州岛天气 - 莲洞/中文</title>
+    <title>济州岛天气 - 降水量</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
@@ -38,17 +38,16 @@
         .col {
             width: 14.28%; display: flex; flex-direction: column; align-items: center; margin-bottom: 12px;
         }
-        /* Weekly 4 per row */
         .weekly-grid .col { width: 25%; margin-bottom: 18px; }
 
         .time { font-size: 11px; color: #757575; font-weight: bold; margin-bottom: 3px; }
         .icon { font-size: 22px; margin-bottom: 2px; }
         .temp { font-size: 14px; font-weight: 900; color: #212121; }
         .wind { font-size: 9px; color: #0288d1; font-weight: 600; margin-top: 1px; }
-        .rain { font-size: 10px; color: #546e7a; font-weight: 500; }
+        .precip { font-size: 10px; color: #546e7a; font-weight: 500; }
 
         .high { color: #d32f2f; } .low { color: #1976d2; }
-        .rain-blue { color: #1e88e5; font-weight: bold; }
+        .precip-blue { color: #1e88e5; font-weight: bold; }
 
         footer { text-align: center; padding: 20px; font-size: 11px; color: #999; }
     </style>
@@ -59,7 +58,7 @@
             <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高지道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
         <div class="card">
@@ -84,7 +83,7 @@
     const PROXY = 'https://api.allorigins.win/raw?url=';
     const now = new Date();
     const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-    document.getElementById('date-label').innerText = `${now.getMonth()+1}月${now.getDate()}일`;
+    document.getElementById('date-label').innerText = `${now.getMonth()+1}月${now.getDate()}日`;
 
     function initCCTV() {
         const streams = [
@@ -115,7 +114,7 @@
 
         for (const loc of locs) {
             try {
-                // 줄바꿈으로 인해 끊긴 URL 수정
+                // 수정: 줄바꿈 제거 및 변수명 매칭 (loc.nx -> loc.x)
                 const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=400&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
                 const res = await fetch(PROXY + encodeURIComponent(url));
                 const json = await res.json();
@@ -139,13 +138,17 @@
                         const pty=parseInt(d.PTY||0), sky=parseInt(d.SKY||1);
                         if(pty>0) icon=(pty===3)?'❄️':'🌧️'; else if(sky>8) icon='☁️'; else if(sky>5) icon='⛅';
                         if(h>=19 && (icon==='☀️'||icon==='⛅')) icon='🌙';
-                        const pop = d.POP || 0;
+
+                        // 강수량(PCP) 처리: "강수없음" -> "0mm"
+                        let pcp = d.PCP;
+                        if(pcp === "강수없음") pcp = "0mm";
+
                         html += `<div class="col">
                             <div class="time">${h}时</div>
                             <div class="icon">${icon}</div>
                             <div class="temp">${d.TMP}°</div>
                             <div class="wind">${d.WSD}m/s</div>
-                            <div class="rain ${pop>0?'rain-blue':''}">${pop}%</div>
+                            <div class="precip ${pcp!=='0mm'?'precip-blue':''}">${pcp}</div>
                         </div>`;
                     }
                 }
@@ -177,7 +180,7 @@
 
         for (const loc of locs) {
             try {
-                // 줄바꿈으로 인해 끊긴 URL 수정
+                // 수정: 줄바꿈 제거 및 URL 파라미터 연결
                 const urlT = `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
                 const resT = await fetch(PROXY + encodeURIComponent(urlT)); const jsonT = await resT.json();
                 
@@ -208,8 +211,7 @@
                             <div class="time">${label}</div>
                             <div class="icon">${icon}</div>
                             <div class="temp"><span class="high">${max}</span>/<span class="low">${min}</span></div>
-                            <div class="rain rain-blue">${pop}%</div>
-                        </div>`;
+                            <div class="precip precip-blue">${pop}%</div> </div>`;
                     }
                     container.innerHTML += `<div class="weather-section">
                         <div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div>
