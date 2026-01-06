@@ -64,10 +64,10 @@
     <div class="container">
         <!-- CCTV -->
         <div class="card" style="background:#000;">
-            <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV) <span style="font-size:10px; font-weight:400; color:#fff; margin-left:5px;">(Tap if black)</span></div>
-            <div class="video-box" onclick="window.open('http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
-            <div class="video-box" onclick="window.open('http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
-            <div class="video-box" onclick="window.open('http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
+            <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
         <!-- Daily Forecast -->
@@ -122,33 +122,9 @@
         return `${y}${m}${d}`;
     }
 
-    function initCCTV() {
-        const streams = [
-            { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8' },
-            { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8' },
-            { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8' }
-        ];
-        if (Hls.isSupported()) {
-            streams.forEach(s => {
-                const v = document.getElementById(s.id);
-                // 클릭 이벤트는 HTML 태그에서 직접 처리함 (안정성)
-                const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
-                h.on(Hls.Events.ERROR, function(e,d){ 
-                    if(d.fatal) {
-                        // 에러 시 로그만 찍고, 클릭 유도
-                        if(d.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                             // console.log("CCTV Network Error");
-                             h.startLoad();
-                        } else {
-                             h.destroy();
-                        }
-                    }
-                });
-            });
-        }
-    }
-
-    async function initDaily() {
+    // 함수 실행 시작
+    initDaily();
+    setTimeout(initWeekly, 1000); // 1초 뒤에 주간예보 실행 (부하 분산)
         const locs = [
             {n:"济州市 (莲洞)", sub:"Yeon-dong", x:52, y:38},
             {n:"西归浦 (中文)", sub:"Jungmun", x:52, y:32},
