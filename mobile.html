@@ -134,8 +134,32 @@
         if (Hls.isSupported()) {
             streams.forEach(s => {
                 const v = document.getElementById(s.id);
-                const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
-                h.on(Hls.Events.ERROR, function(e,d){ if(d.fatal) h.startLoad(); });
+                // [수정] HLS 설정 추가: 디버그 및 로딩 정책 완화
+                const config = {
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90
+                };
+                const h = new Hls(config); 
+                h.loadSource(s.url); 
+                h.attachMedia(v);
+                h.on(Hls.Events.ERROR, function(e,d){ 
+                    if(d.fatal) {
+                        log(`CCTV Error(${s.id}): ${d.type}`);
+                        switch(d.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                h.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                h.recoverMediaError();
+                                break;
+                            default:
+                                h.destroy();
+                                break;
+                        }
+                    }
+                });
             });
         }
     }
