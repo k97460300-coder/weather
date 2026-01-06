@@ -185,14 +185,23 @@
                         if(pty>0) icon=(pty===3)?'❄️':'🌧️'; else if(sky>8) icon='☁️'; else if(sky>5) icon='⛅';
                         if(h>=19 && (icon==='☀️'||icon==='⛅')) icon='🌙';
 
+                        // 강수량(PCP) 처리
                         let pcp = d.PCP || '0';
-                        if(pcp === "강수없음") pcp = "0mm";
+                        if (pcp === "강수없음") {
+                            pcp = "0mm";
+                        } else if (pcp.includes("미만")) { 
+                            // "1mm 미만", "1.0mm 미만" 등 처리
+                            pcp = "~1mm";
+                        } else if (!pcp.endsWith("mm")) {
+                            // 숫자만 있는 경우 단위 붙임
+                            pcp += "mm";
+                        }
 
                         html += `<div class="col">
                             <div class="time">${h}h</div>
                             <div class="icon">${icon}</div>
                             <div class="temp">${d.TMP||'-'}°</div>
-                            <div class="wind">${d.WSD||'-'}</div>
+                            <div class="wind">${d.WSD||'-'}m/s</div>
                             <div class="precip ${pcp!=='0mm'?'precip-blue':''}">${pcp}</div>
                         </div>`;
                     }
@@ -206,6 +215,7 @@
     }
 
     async function initWeekly() {
+        log("Start initWeekly");
         const container = document.getElementById('weekly-list');
         const statusSpan = document.getElementById('weekly-status');
         
@@ -238,7 +248,12 @@
 
         container.innerHTML = '';
 
+        log(`ShortBase: ${shortBaseDate}, MidTmFc: ${midTmFc}`);
+
+        let isFirst = true;
+
         for (const loc of locs) {
+            log(`Processing ${loc.name}...`);
             let combinedData = {};
             
             // A. 단기예보 (0~3일)
@@ -246,7 +261,7 @@
                 const urlS = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`;
                 const resS = await fetch(urlS); const jsonS = await resS.json();
                 
-                if(jsonS.response.header.resultCode === '00'){
+                if(jsonS.response && jsonS.response.header.resultCode === '00'){
                     const tempDays = {};
                     jsonS.response.body.items.item.forEach(it => {
                         const date = it.fcstDate;
@@ -272,8 +287,10 @@
                             combinedData[i] = { min: t.min, max: t.max, wf: wf, pop: t.pop };
                         }
                     }
+                } else {
+                    log(`Short API Fail: ${jsonS.response.header.resultMsg}`);
                 }
-            } catch(e) { log(e.message); }
+            } catch(e) { log(`Short API Error: ${e.message}`); }
 
             // B. 중기예보 (4~10일)
             try {
@@ -283,9 +300,12 @@
                 const urlL = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
                 const resL = await fetch(urlL); const jsonL = await resL.json();
 
-                if(jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
+                if(jsonT.response && jsonL.response && jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
                     const t = jsonT.response.body.items.item[0];
                     const l = jsonL.response.body.items.item[0];
+                    
+                    // [Debug] 4일차 데이터 확인
+                    log(`[Mid] Day4 Raw: Min=${t.taMin4}, Max=${t.taMax4}, WfPm=${l.wf4Pm}, WfAm=${l.wf4Am}`);
 
                     for(let i=4; i<=10; i++) {
                         let wf = l[`wf${i}Pm`] || l[`wf${i}Am`] || l[`wf${i}`];
@@ -298,8 +318,10 @@
                             wf: wf, pop: pop
                         };
                     }
+                } else {
+                    log("Mid API Fail or No Data");
                 }
-            } catch(e) { log(e.message); }
+            } catch(e) { log(`Mid API Error: ${e.message}`); }
 
             // C. 렌더링
             let html = '';
@@ -336,7 +358,7 @@
 
     initCCTV();
     initDaily();
-    setTimeout(initWeekly, 1000);
+    setTimeout(initWeekly, 2000);
 </script>
 </body>
 </html>
