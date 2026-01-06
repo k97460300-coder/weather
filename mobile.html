@@ -122,9 +122,7 @@
         return `${y}${m}${d}`;
     }
 
-    // 함수 실행 시작
-    initDaily();
-    setTimeout(initWeekly, 1000); // 1초 뒤에 주간예보 실행 (부하 분산)
+    async function initDaily() {
         const locs = [
             {n:"济州市 (莲洞)", sub:"Yeon-dong", x:52, y:38},
             {n:"西归浦 (中文)", sub:"Jungmun", x:52, y:32},
@@ -334,6 +332,27 @@
             </div>`;
         }
         statusSpan.innerText = "";
+    }
+
+    function initCCTV() {
+        if(Hls.isSupported()) {
+            const streams = [
+                { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/playlist.m3u8' },
+                { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/playlist.m3u8' },
+                { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv02.stream_360p/playlist.m3u8' }
+            ];
+            streams.forEach(s => {
+                const video = document.getElementById(s.id);
+                if(video) {
+                    const hls = new Hls();
+                    hls.loadSource(s.url);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        video.play().catch(e => console.log("Auto-play blocked", e));
+                    });
+                }
+            });
+        }
     }
 
     // 함수 실행 시작
