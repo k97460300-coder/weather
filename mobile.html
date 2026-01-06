@@ -21,7 +21,7 @@
         .badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: #e8f5e9; color: #2e7d32; font-weight: bold; }
 
         /* CCTV Section */
-        .video-box { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-bottom: 1px solid #222; }
+        .video-box { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-bottom: 1px solid #222; cursor: pointer; }
         .live-tag { position: absolute; top: 10px; left: 10px; background: #ff5252; color: white; padding: 2px 6px; font-size: 10px; border-radius: 3px; z-index: 10; animation: blink 1.5s infinite; font-weight: bold; }
         .vid-label { position: absolute; bottom: 8px; left: 10px; color: white; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); z-index: 10; }
         video { width: 100%; height: 100%; object-fit: cover; }
@@ -61,17 +61,13 @@
     </style>
 </head>
 <body>
-    <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="cors-alert">
-        ⚠️ [Click] Request temporary access (CORS) -> Then Refresh
-    </a>
-
     <div class="container">
-        <!-- CCTV 섹션 (동영상 재생 방식으로 복구) -->
+        <!-- CCTV -->
         <div class="card" style="background:#000;">
-            <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
+            <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV) <span style="font-size:10px; font-weight:400; color:#fff; margin-left:5px;">(Tap if black)</span></div>
+            <div class="video-box" onclick="window.open('http://211.114.96.121:1935/jejusi7/11-24.stream/chunklist_w1514884533.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
+            <div class="video-box" onclick="window.open('http://119.65.216.155:1935/live/cctv03.stream_360p/chunklist_w324217178.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
+            <div class="video-box" onclick="window.open('http://119.65.216.155:1935/live/cctv05.stream_360p/chunklist_w1064037964.m3u8', '_system')"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
         <!-- Daily Forecast -->
@@ -108,7 +104,8 @@
 
     const MASTER_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce'; 
     const API_KEY = MASTER_KEY.trim(); 
-    const PROXY = 'https://cors-anywhere.herokuapp.com/';
+    // [수정] 더 안정적인 프록시 사용 (버튼 클릭 필요 없음)
+    const PROXY = 'https://api.allorigins.win/raw?url=';
 
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -134,12 +131,17 @@
         if (Hls.isSupported()) {
             streams.forEach(s => {
                 const v = document.getElementById(s.id);
+                // 클릭 이벤트는 HTML 태그에서 직접 처리함 (안정성)
                 const h = new Hls(); h.loadSource(s.url); h.attachMedia(v);
                 h.on(Hls.Events.ERROR, function(e,d){ 
                     if(d.fatal) {
-                        log(`CCTV Error(${s.id}): ${d.type}`);
-                        if(d.type === Hls.ErrorTypes.NETWORK_ERROR) h.startLoad();
-                        else if(d.type === Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
+                        // 에러 시 로그만 찍고, 클릭 유도
+                        if(d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                             // console.log("CCTV Network Error");
+                             h.startLoad();
+                        } else {
+                             h.destroy();
+                        }
                     }
                 });
             });
@@ -167,12 +169,13 @@
 
         for (const loc of locs) {
             try {
-                const url = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
+                // api.allorigins.win 사용 시 url 파라미터 인코딩 필요
+                const url = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`)}`;
                 const res = await fetch(url);
                 const json = await res.json();
                 
                 const hourly = {};
-                if(json.response.header.resultCode === '00'){
+                if(json.response && json.response.header.resultCode === '00'){
                     json.response.body.items.item.forEach(i => {
                         if (i.fcstDate === todayStr) {
                             const h = parseInt(i.fcstTime.slice(0,2));
@@ -196,10 +199,8 @@
                         if (pcp === "강수없음") {
                             pcp = "0mm";
                         } else if (pcp.includes("미만")) { 
-                            // "1mm 미만", "1.0mm 미만" 등 처리
                             pcp = "~1mm";
                         } else if (!pcp.endsWith("mm")) {
-                            // 숫자만 있는 경우 단위 붙임
                             pcp += "mm";
                         }
 
@@ -216,7 +217,7 @@
                         <div class="grid">${html}</div>
                     </div>`;
                 }
-            } catch(e) { log(e.message); }
+            } catch(e) { log(`Daily Error: ${e.message}`); }
         }
     }
 
@@ -256,15 +257,13 @@
 
         log(`ShortBase: ${shortBaseDate}, MidTmFc: ${midTmFc}`);
 
-        let isFirst = true;
-
         for (const loc of locs) {
             log(`Processing ${loc.name}...`);
             let combinedData = {};
             
             // A. 단기예보 (0~3일)
             try {
-                const urlS = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`;
+                const urlS = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`)}`;
                 const resS = await fetch(urlS); const jsonS = await resS.json();
                 
                 if(jsonS.response && jsonS.response.header.resultCode === '00'){
@@ -300,17 +299,16 @@
 
             // B. 중기예보 (4~10일)
             try {
-                const urlT = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
+                const urlT = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`)}`;
                 const resT = await fetch(urlT); const jsonT = await resT.json();
                 
-                const urlL = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
+                const urlL = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`)}`;
                 const resL = await fetch(urlL); const jsonL = await resL.json();
 
                 if(jsonT.response && jsonL.response && jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
                     const t = jsonT.response.body.items.item[0];
                     const l = jsonL.response.body.items.item[0];
                     
-                    // [Debug] 4일차 데이터 확인
                     log(`[Mid] Day4 Raw: Min=${t.taMin4}, Max=${t.taMax4}, WfPm=${l.wf4Pm}, WfAm=${l.wf4Am}`);
 
                     for(let i=4; i<=10; i++) {
