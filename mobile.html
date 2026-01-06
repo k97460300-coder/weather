@@ -38,7 +38,8 @@
         .col {
             width: 14.28%; display: flex; flex-direction: column; align-items: center; margin-bottom: 12px;
         }
-        .weekly-grid .col { width: 25%; margin-bottom: 18px; }
+        /* 주간 예보는 7일치(4~10일)를 보여주므로 7등분 */
+        .weekly-grid .col { width: 14.28%; margin-bottom: 18px; }
 
         .time { font-size: 11px; color: #757575; font-weight: bold; margin-bottom: 3px; }
         .icon { font-size: 22px; margin-bottom: 2px; }
@@ -50,10 +51,22 @@
         .precip-blue { color: #1e88e5; font-weight: bold; }
 
         footer { text-align: center; padding: 20px; font-size: 11px; color: #999; }
+        
+        /* CORS Alert */
+        .cors-alert { 
+            width: 100%; max-width: 600px; background: #ff4d4f; color: white; 
+            padding: 10px; margin-bottom: 10px; text-align: center; border-radius: 8px; 
+            font-weight: bold; cursor: pointer; text-decoration: none; display: block; font-size: 12px;
+        }
     </style>
 </head>
 <body>
+    <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="cors-alert">
+        ⚠️ [Click] Request temporary access (CORS) -> Then Refresh
+    </a>
+
     <div class="container">
+        <!-- CCTV -->
         <div class="card" style="background:#000;">
             <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
@@ -61,29 +74,56 @@
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
+        <!-- Daily Forecast -->
         <div class="card">
-            <div class="card-header">☀️ 今日逐时预报 (09:00 - 22:00) <span class="badge" id="date-label"></span></div>
+            <div class="card-header">☀️ 今日逐时预报 (Hourly) <span class="badge" id="date-label"></span></div>
             <div id="daily-list">
-                <div style="padding:40px; text-align:center; color:#999; font-size:14px;">正在获取实时天气数据...</div>
+                <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取实时天气数据...</div>
             </div>
         </div>
 
+        <!-- Weekly Forecast (Combined Short+Mid) -->
         <div class="card">
-            <div class="card-header">📅 未来10天长期预报</div>
+            <div class="card-header">📅 未来10天长期预报 <span class="badge" id="weekly-status">Updating</span></div>
             <div id="weekly-list">
-                <div style="padding:40px; text-align:center; color:#999; font-size:14px;">正在获取长期预报数据...</div>
+                <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取长期预报数据...</div>
             </div>
         </div>
 
         <footer>Data provided by Korea Meteorological Administration</footer>
     </div>
+    
+    <!-- Debug Log -->
+    <div id="debug-log" style="width:100%; max-width:600px; background:#333; color:#0f0; padding:10px; font-size:10px; font-family:monospace; margin-top:20px; display:none; word-break: break-all;"></div>
 
 <script>
-    const API_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce';
-    const PROXY = 'https://api.allorigins.win/raw?url=';
+    function log(msg) {
+        console.log(msg);
+        const d = document.getElementById('debug-log');
+        if(d) {
+            d.style.display = 'block';
+            d.innerHTML += `<div>> ${msg}</div>`;
+        }
+    }
+
+    const MASTER_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce'; 
+    const API_KEY = MASTER_KEY.trim(); 
+    const PROXY = 'https://cors-anywhere.herokuapp.com/';
+
     const now = new Date();
-    const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth()+1).padStart(2,'0'); 
+    const dd = String(now.getDate()).padStart(2,'0');
+    const todayStr = yyyy + mm + dd;
+    
     document.getElementById('date-label').innerText = `${now.getMonth()+1}月${now.getDate()}日`;
+
+    function getFormatDate(date) {
+        const y = date.getFullYear();
+        const m = ('0' + (date.getMonth() + 1)).slice(-2);
+        const d = ('0' + date.getDate()).slice(-2);
+        return `${y}${m}${d}`;
+    }
 
     function initCCTV() {
         const streams = [
@@ -107,124 +147,196 @@
             {n:"汉拿山", sub:"Mt.Halla", x:52, y:35},
             {n:"牛岛", sub:"Udo Island", x:60, y:38}
         ];
-        const baseTime = now.getHours() < 2 ? "2300" : "0200";
-        const baseDate = now.getHours() < 2 ? String(Number(todayStr)-1) : todayStr;
+        
+        let baseDate = todayStr;
+        let baseTime = "0200";
+        if (now.getHours() < 2 || (now.getHours() === 2 && now.getMinutes() < 15)) {
+            baseTime = "2300";
+            const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1); 
+            baseDate = getFormatDate(yD);
+        }
+
         const container = document.getElementById('daily-list');
         container.innerHTML = '';
 
         for (const loc of locs) {
             try {
-                // 수정: 줄바꿈 제거 및 변수명 매칭 (loc.nx -> loc.x)
-                const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=400&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
-                const res = await fetch(PROXY + encodeURIComponent(url));
+                const url = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`;
+                const res = await fetch(url);
                 const json = await res.json();
-
+                
                 const hourly = {};
-                json.response.body.items.item.forEach(i => {
-                    if (i.fcstDate === todayStr) {
-                        const h = parseInt(i.fcstTime.slice(0,2));
-                        if(h>=9 && h<=22) {
-                            if(!hourly[h]) hourly[h] = {};
-                            hourly[h][i.category] = i.fcstValue;
+                if(json.response.header.resultCode === '00'){
+                    json.response.body.items.item.forEach(i => {
+                        if (i.fcstDate === todayStr) {
+                            const h = parseInt(i.fcstTime.slice(0,2));
+                            if(h>=9 && h<=22) {
+                                if(!hourly[h]) hourly[h] = {};
+                                hourly[h][i.category] = i.fcstValue;
+                            }
                         }
-                    }
-                });
+                    });
 
-                let html = '';
-                for(let h=9; h<=22; h++) {
-                    const d = hourly[h];
-                    if(d) {
+                    let html = '';
+                    for(let h=9; h<=22; h++) {
+                        const d = hourly[h] || {};
                         let icon = '☀️';
                         const pty=parseInt(d.PTY||0), sky=parseInt(d.SKY||1);
                         if(pty>0) icon=(pty===3)?'❄️':'🌧️'; else if(sky>8) icon='☁️'; else if(sky>5) icon='⛅';
                         if(h>=19 && (icon==='☀️'||icon==='⛅')) icon='🌙';
 
-                        // 강수량(PCP) 처리: "강수없음" -> "0mm"
-                        let pcp = d.PCP;
+                        let pcp = d.PCP || '0';
                         if(pcp === "강수없음") pcp = "0mm";
 
                         html += `<div class="col">
-                            <div class="time">${h}时</div>
+                            <div class="time">${h}h</div>
                             <div class="icon">${icon}</div>
-                            <div class="temp">${d.TMP}°</div>
-                            <div class="wind">${d.WSD}m/s</div>
+                            <div class="temp">${d.TMP||'-'}°</div>
+                            <div class="wind">${d.WSD||'-'}</div>
                             <div class="precip ${pcp!=='0mm'?'precip-blue':''}">${pcp}</div>
                         </div>`;
                     }
+                    container.innerHTML += `<div class="weather-section">
+                        <div class="loc-info"><span class="loc-name">${loc.n}</span><span class="loc-sub">${loc.sub}</span></div>
+                        <div class="grid">${html}</div>
+                    </div>`;
                 }
-                container.innerHTML += `<div class="weather-section">
-                    <div class="loc-info"><span class="loc-name">${loc.n}</span><span class="loc-sub">${loc.sub}</span></div>
-                    <div class="grid">${html}</div>
-                </div>`;
-            } catch(e) { }
+            } catch(e) { log(e.message); }
         }
     }
 
     async function initWeekly() {
         const container = document.getElementById('weekly-list');
+        const statusSpan = document.getElementById('weekly-status');
+        
         const locs = [
-            { name: "济州市", sub: "Jeju City", regIdTemp: '11G00201', regIdLand: '11G00000' },
-            { name: "西归浦", sub: "Seogwipo", regIdTemp: '11G00401', regIdLand: '11G00000' }
+            { name: "济州市", sub: "Jeju City", regIdTemp: '11G00201', regIdLand: '11G00000', nx:52, ny:38 },
+            { name: "西归浦", sub: "Seogwipo", regIdTemp: '11G00401', regIdLand: '11G00000', nx:52, ny:32 },
+            { name: "汉拿山", sub: "Mt.Halla", regIdTemp: '11G00401', regIdLand: '11G00000', nx:52, ny:35 },
+            { name: "牛岛", sub: "Udo Island", regIdTemp: '11G00302', regIdLand: '11G00000', nx:60, ny:38 }
         ];
 
+        // 1) 단기예보용 (Short: 0~3일)
+        let shortBaseDate = todayStr;
+        let shortBaseTime = "0200";
+        if (now.getHours() < 2) {
+             const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
+             shortBaseDate = getFormatDate(yD);
+             shortBaseTime = "2300";
+        }
+
+        // 2) 중기예보용 (Mid: 4~10일)
         const h = now.getHours();
-        let midTmFc, dayShift = 0;
-        if (h < 6) {
-            const yD = new Date(now); yD.setDate(now.getDate() - 1);
-            midTmFc = `${yD.getFullYear()}${String(yD.getMonth()+1).padStart(2,'0')}${String(yD.getDate()).padStart(2,'0')}1800`;
-            dayShift = 1;
-        } else if (h >= 18) { midTmFc = `${todayStr}1800`; }
-        else { midTmFc = `${todayStr}0600`; }
+        let midTmFc;
+        if (h < 8) {
+             const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
+             const yM = ('0'+(yD.getMonth()+1)).slice(-2);
+             const yDate = ('0'+yD.getDate()).slice(-2);
+             midTmFc = `${yD.getFullYear()}${yM}${yDate}1800`;
+        } else if (h >= 8 && h < 20) { midTmFc = `${todayStr}0600`; }
+        else { midTmFc = `${todayStr}1800`; }
 
         container.innerHTML = '';
 
         for (const loc of locs) {
+            let combinedData = {};
+            
+            // A. 단기예보 (0~3일)
             try {
-                // 수정: 줄바꿈 제거 및 URL 파라미터 연결
-                const urlT = `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
-                const resT = await fetch(PROXY + encodeURIComponent(urlT)); const jsonT = await resT.json();
+                const urlS = `${PROXY}https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`;
+                const resS = await fetch(urlS); const jsonS = await resS.json();
                 
-                const urlL = `https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
-                const resL = await fetch(PROXY + encodeURIComponent(urlL)); const jsonL = await resL.json();
+                if(jsonS.response.header.resultCode === '00'){
+                    const tempDays = {};
+                    jsonS.response.body.items.item.forEach(it => {
+                        const date = it.fcstDate;
+                        if(!tempDays[date]) tempDays[date] = { min:100, max:-100, sky:1, pty:0, pop:0, temps:[] };
+                        if(it.category === 'TMN') tempDays[date].min = parseFloat(it.fcstValue);
+                        if(it.category === 'TMX') tempDays[date].max = parseFloat(it.fcstValue);
+                        if(it.category === 'TMP') tempDays[date].temps.push(parseFloat(it.fcstValue));
+                        if(it.category === 'POP') tempDays[date].pop = Math.max(tempDays[date].pop, parseInt(it.fcstValue));
+                        if(it.category === 'PTY') tempDays[date].pty = Math.max(tempDays[date].pty, parseInt(it.fcstValue));
+                        if(it.category === 'SKY') tempDays[date].sky = parseInt(it.fcstValue); 
+                    });
+                    
+                    for(let i=0; i<=3; i++){
+                        const d = new Date(yyyy, now.getMonth(), now.getDate() + i);
+                        const dStr = getFormatDate(d);
+                        const t = tempDays[dStr];
+                        if(t) {
+                            if(t.min === 100 && t.temps.length > 0) t.min = Math.min(...t.temps);
+                            if(t.max === -100 && t.temps.length > 0) t.max = Math.max(...t.temps);
+                            let wf = "맑음";
+                            if(t.pty > 0) { if(t.pty===3) wf="눈"; else wf="비"; } 
+                            else { if(t.sky===3) wf="구름많음"; else if(t.sky===4) wf="흐림"; }
+                            combinedData[i] = { min: t.min, max: t.max, wf: wf, pop: t.pop };
+                        }
+                    }
+                }
+            } catch(e) { log(e.message); }
+
+            // B. 중기예보 (4~10일)
+            try {
+                const urlT = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`;
+                const resT = await fetch(urlT); const jsonT = await resT.json();
+                
+                const urlL = `${PROXY}https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`;
+                const resL = await fetch(urlL); const jsonL = await resL.json();
 
                 if(jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
                     const t = jsonT.response.body.items.item[0];
                     const l = jsonL.response.body.items.item[0];
-                    let html = '';
 
-                    for(let i=3; i<=10; i++) {
-                        const k = i + dayShift; if(k>10) continue;
-                        const d = new Date(now); d.setDate(now.getDate() + i);
-                        const label = `${d.getMonth()+1}/${d.getDate()}`;
-
-                        let wf = (k<=7) ? (l[`wf${k}Pm`]||l[`wf${k}`]) : l[`wf${k}`];
-                        let icon = '☀️';
-                        if(wf.includes('흐림')) icon='☁️';
-                        else if(wf.includes('구름')) icon='⛅';
-                        else if(wf.includes('비')) icon='🌧️';
-
-                        const min = t[`taMin${k}`]||t[`taMin${k}Low`]||'-';
-                        const max = t[`taMax${k}`]||t[`taMax${k}High`]||'-';
-                        const pop = (k<=7) ? (l[`rnSt${k}Pm`]||l[`rnSt${k}`]) : l[`rnSt${k}`];
-
-                        html += `<div class="col">
-                            <div class="time">${label}</div>
-                            <div class="icon">${icon}</div>
-                            <div class="temp"><span class="high">${max}</span>/<span class="low">${min}</span></div>
-                            <div class="precip precip-blue">${pop}%</div> </div>`;
+                    for(let i=4; i<=10; i++) {
+                        let wf = l[`wf${i}Pm`] || l[`wf${i}Am`] || l[`wf${i}`];
+                        let pop = l[`rnSt${i}Pm`];
+                        if (pop === undefined) pop = l[`rnSt${i}Am`];
+                        if (pop === undefined) pop = l[`rnSt${i}`];
+                        
+                        combinedData[i] = {
+                            min: t[`taMin${i}`], max: t[`taMax${i}`],
+                            wf: wf, pop: pop
+                        };
                     }
-                    container.innerHTML += `<div class="weather-section">
-                        <div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div>
-                        <div class="grid weekly-grid">${html}</div>
-                    </div>`;
                 }
-            } catch(e) { }
+            } catch(e) { log(e.message); }
+
+            // C. 렌더링
+            let html = '';
+            for(let i=0; i<=10; i++) {
+                const d = new Date(yyyy, now.getMonth(), now.getDate() + i);
+                const label = `${d.getMonth()+1}/${d.getDate()}`;
+                const w = combinedData[i] || { wf: '-', min: '-', max: '-', pop: '-' };
+                
+                const wf = w.wf || "-";
+                let icon = '☀️';
+                if(wf.includes('흐림')) icon='☁️';
+                else if(wf.includes('구름') || wf.includes('많음')) icon='⛅';
+                else if(wf.includes('비')) icon='🌧️';
+                else if(wf.includes('눈')) icon='❄️';
+
+                const minT = (w.min !== undefined && w.min !== 100) ? w.min : '-';
+                const maxT = (w.max !== undefined && w.max !== -100) ? w.max : '-';
+                const pop = (w.pop !== undefined) ? w.pop : 0;
+
+                html += `<div class="col">
+                    <div class="time">${label}<br><span style="font-size:9px; color:#aaa;">+${i}D</span></div>
+                    <div class="icon">${icon}</div>
+                    <div class="temp"><span class="high">${maxT}</span>/<span class="low">${minT}</span></div>
+                    <div class="precip ${pop>0?'precip-blue':''}">${pop}%</div>
+                </div>`;
+            }
+            container.innerHTML += `<div class="weather-section">
+                <div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div>
+                <div class="grid weekly-grid">${html}</div>
+            </div>`;
         }
+        statusSpan.innerText = "";
     }
 
     initCCTV();
     initDaily();
-    setTimeout(initWeekly, 2000);
+    setTimeout(initWeekly, 1000);
 </script>
 </body>
 </html>
