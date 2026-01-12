@@ -98,7 +98,7 @@
         const d = document.getElementById('debug-log');
         if(d) {
             d.style.display = 'block';
-            d.innerHTML += `<div>> ${msg}</div>`;
+            d.innerHTML += '<div>> ' + msg + '</div>';
         }
     }
 
@@ -113,13 +113,13 @@
     const dd = String(now.getDate()).padStart(2,'0');
     const todayStr = yyyy + mm + dd;
     
-    document.getElementById('date-label').innerText = `${now.getMonth()+1}月${now.getDate()}日`;
+    document.getElementById('date-label').innerText = (now.getMonth()+1) + '月' + now.getDate() + '日';
 
     function getFormatDate(date) {
         const y = date.getFullYear();
         const m = ('0' + (date.getMonth() + 1)).slice(-2);
         const d = ('0' + date.getDate()).slice(-2);
-        return `${y}${m}${d}`;
+        return y + '' + m + '' + d;
     }
 
     async function initDaily() {
@@ -144,7 +144,7 @@
         for (const loc of locs) {
             try {
                 // api.allorigins.win 사용 시 url 파라미터 인코딩 필요
-                const url = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${loc.x}&ny=${loc.y}`)}`;
+                const url = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + baseDate + '&base_time=' + baseTime + '&nx=' + loc.x + '&ny=' + loc.y);
                 const res = await fetch(url);
                 const json = await res.json();
                 
@@ -178,20 +178,11 @@
                             pcp += "mm";
                         }
 
-                        html += `<div class="col">
-                            <div class="time">${h}h</div>
-                            <div class="icon">${icon}</div>
-                            <div class="temp">${d.TMP||'-'}°</div>
-                            <div class="wind">${d.WSD||'-'}m/s</div>
-                            <div class="precip ${pcp!=='0mm'?'precip-blue':''}">${pcp}</div>
-                        </div>`;
+                        html += '<div class="col"><div class="time">' + h + 'h</div><div class="icon">' + icon + '</div><div class="temp">' + (d.TMP||'-') + '°</div><div class="wind">' + (d.WSD||'-') + 'm/s</div><div class="precip ' + (pcp!=='0mm'?'precip-blue':'') + '">' + pcp + '</div></div>';
                     }
-                    container.innerHTML += `<div class="weather-section">
-                        <div class="loc-info"><span class="loc-name">${loc.n}</span><span class="loc-sub">${loc.sub}</span></div>
-                        <div class="grid">${html}</div>
-                    </div>`;
+                    container.innerHTML += '<div class="weather-section"><div class="loc-info"><span class="loc-name">' + loc.n + '</span><span class="loc-sub">' + loc.sub + '</span></div><div class="grid">' + html + '</div></div>';
                 }
-            } catch(e) { log(`Daily Error: ${e.message}`); }
+            } catch(e) { log('Daily Error: ' + e.message); }
         }
     }
 
@@ -223,21 +214,21 @@
              const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
              const yM = ('0'+(yD.getMonth()+1)).slice(-2);
              const yDate = ('0'+yD.getDate()).slice(-2);
-             midTmFc = `${yD.getFullYear()}${yM}${yDate}1800`;
-        } else if (h >= 8 && h < 20) { midTmFc = `${todayStr}0600`; }
-        else { midTmFc = `${todayStr}1800`; }
+             midTmFc = yD.getFullYear() + '' + yM + '' + yDate + '1800';
+        } else if (h >= 8 && h < 20) { midTmFc = todayStr + '0600'; }
+        else { midTmFc = todayStr + '1800'; }
 
         container.innerHTML = '';
 
-        log(`ShortBase: ${shortBaseDate}, MidTmFc: ${midTmFc}`);
+        log('ShortBase: ' + shortBaseDate + ', MidTmFc: ' + midTmFc);
 
         for (const loc of locs) {
-            log(`Processing ${loc.name}...`);
+            log('Processing ' + loc.name + '...');
             let combinedData = {};
             
             // A. 단기예보 (0~3일)
             try {
-                const urlS = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${API_KEY}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${shortBaseDate}&base_time=${shortBaseTime}&nx=${loc.nx}&ny=${loc.ny}`)}`;
+                const urlS = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + shortBaseDate + '&base_time=' + shortBaseTime + '&nx=' + loc.nx + '&ny=' + loc.ny);
                 const resS = await fetch(urlS); const jsonS = await resS.json();
                 
                 if(jsonS.response && jsonS.response.header.resultCode === '00'){
@@ -267,45 +258,45 @@
                         }
                     }
                 } else {
-                    log(`Short API Fail: ${jsonS.response.header.resultMsg}`);
+                    log('Short API Fail: ' + jsonS.response.header.resultMsg);
                 }
-            } catch(e) { log(`Short API Error: ${e.message}`); }
+            } catch(e) { log('Short API Error: ' + e.message); }
 
             // B. 중기예보 (4~10일)
             try {
-                const urlT = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdTemp}&tmFc=${midTmFc}`)}`;
+                const urlT = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdTemp + '&tmFc=' + midTmFc);
                 const resT = await fetch(urlT); const jsonT = await resT.json();
                 
-                const urlL = `${PROXY}${encodeURIComponent(`https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=${API_KEY}&numOfRows=1&pageNo=1&dataType=JSON&regId=${loc.regIdLand}&tmFc=${midTmFc}`)}`;
+                const urlL = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdLand + '&tmFc=' + midTmFc);
                 const resL = await fetch(urlL); const jsonL = await resL.json();
 
                 if(jsonT.response && jsonL.response && jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
                     const t = jsonT.response.body.items.item[0];
                     const l = jsonL.response.body.items.item[0];
                     
-                    log(`[Mid] Day4 Raw: Min=${t.taMin4}, Max=${t.taMax4}, WfPm=${l.wf4Pm}, WfAm=${l.wf4Am}`);
+                    log('[Mid] Day4 Raw: Min=' + t.taMin4 + ', Max=' + t.taMax4 + ', WfPm=' + l.wf4Pm + ', WfAm=' + l.wf4Am);
 
                     for(let i=4; i<=10; i++) {
-                        let wf = l[`wf${i}Pm`] || l[`wf${i}Am`] || l[`wf${i}`];
-                        let pop = l[`rnSt${i}Pm`];
-                        if (pop === undefined) pop = l[`rnSt${i}Am`];
-                        if (pop === undefined) pop = l[`rnSt${i}`];
+                        let wf = l['wf'+i+'Pm'] || l['wf'+i+'Am'] || l['wf'+i];
+                        let pop = l['rnSt'+i+'Pm'];
+                        if (pop === undefined) pop = l['rnSt'+i+'Am'];
+                        if (pop === undefined) pop = l['rnSt'+i];
                         
                         combinedData[i] = {
-                            min: t[`taMin${i}`], max: t[`taMax${i}`],
+                            min: t['taMin'+i], max: t['taMax'+i],
                             wf: wf, pop: pop
                         };
                     }
                 } else {
                     log("Mid API Fail or No Data");
                 }
-            } catch(e) { log(`Mid API Error: ${e.message}`); }
+            } catch(e) { log('Mid API Error: ' + e.message); }
 
             // C. 렌더링
             let html = '';
             for(let i=0; i<=10; i++) {
                 const d = new Date(yyyy, now.getMonth(), now.getDate() + i);
-                const label = `${d.getMonth()+1}/${d.getDate()}`;
+                const label = (d.getMonth()+1) + '/' + d.getDate();
                 const w = combinedData[i] || { wf: '-', min: '-', max: '-', pop: '-' };
                 
                 const wf = w.wf || "-";
@@ -319,17 +310,9 @@
                 const maxT = (w.max !== undefined && w.max !== -100) ? w.max : '-';
                 const pop = (w.pop !== undefined) ? w.pop : 0;
 
-                html += `<div class="col">
-                    <div class="time">${label}<br><span style="font-size:9px; color:#aaa;">+${i}D</span></div>
-                    <div class="icon">${icon}</div>
-                    <div class="temp"><span class="high">${maxT}</span>/<span class="low">${minT}</span></div>
-                    <div class="precip ${pop>0?'precip-blue':''}">${pop}%</div>
-                </div>`;
+                html += '<div class="col"><div class="time">' + label + '<br><span style="font-size:9px; color:#aaa;">+' + i + 'D</span></div><div class="icon">' + icon + '</div><div class="temp"><span class="high">' + maxT + '</span>/<span class="low">' + minT + '</span></div><div class="precip ' + (pop>0?'precip-blue':'') + '">' + pop + '%</div></div>';
             }
-            container.innerHTML += `<div class="weather-section">
-                <div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div>
-                <div class="grid weekly-grid">${html}</div>
-            </div>`;
+            container.innerHTML += '<div class="weather-section"><div class="loc-info"><span class="loc-name">' + loc.name + '</span><span class="loc-sub">' + loc.sub + '</span></div><div class="grid weekly-grid">' + html + '</div></div>';
         }
         statusSpan.innerText = "";
     }
