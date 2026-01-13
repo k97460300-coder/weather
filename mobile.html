@@ -67,7 +67,7 @@
             <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (雪景)</div><video id="v3" autoplay muted playsinline></video></div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 御里牧 (Eorimok - 雪景)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
         <!-- Daily Forecast -->
@@ -83,6 +83,14 @@
             <div class="card-header">📅 未来10天长期预报 <span class="badge" id="weekly-status">Updating</span></div>
             <div id="weekly-list">
                 <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取长期预报数据...</div>
+            </div>
+        </div>
+
+        <!-- Hallasan Status -->
+        <div class="card">
+            <div class="card-header">🏔️ 汉拿山探访路控制信息 <span class="badge" id="hallasan-status">Checking</span></div>
+            <div id="hallasan-list" style="padding:15px;">
+                <div style="padding:20px; text-align:center; color:#999; font-size:12px;">正在获取实时控制信息...</div>
             </div>
         </div>
 
@@ -201,32 +209,35 @@
         // 1) 단기예보용 (Short: 0~3일)
         let shortBaseDate = todayStr;
         let shortBaseTime = "0200";
-        if (now.getHours() < 2) {
+        if (now.getHours() < 3) { // 02시 데이터는 02:10 이후 생성됨 -> 안전하게 3시 이전엔 어제 23시 사용
              const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
              shortBaseDate = getFormatDate(yD);
              shortBaseTime = "2300";
         }
 
-        // 2) 중기예보용 (Mid: 4~10일)
+        // 2) 중기예보용 (Mid: 4~10일) - [수정] 시간 로직 보수적으로 변경
         const h = now.getHours();
         let midTmFc;
-        if (h < 8) {
+        
+        if (h < 9) {
              const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
              const yM = ('0'+(yD.getMonth()+1)).slice(-2);
              const yDate = ('0'+yD.getDate()).slice(-2);
              midTmFc = yD.getFullYear() + '' + yM + '' + yDate + '1800';
-        } else if (h >= 8 && h < 20) { midTmFc = todayStr + '0600'; }
-        else { midTmFc = todayStr + '1800'; }
+        } else if (h >= 9 && h < 21) { 
+             midTmFc = todayStr + '0600'; 
+        } else { 
+             midTmFc = todayStr + '1800'; 
+        }
 
         container.innerHTML = '';
-
         log('ShortBase: ' + shortBaseDate + ', MidTmFc: ' + midTmFc);
 
         for (const loc of locs) {
             log('Processing ' + loc.name + '...');
             let combinedData = {};
             
-            // A. 단기예보 (0~3일)
+            // A. 단기예보
             try {
                 const urlS = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + shortBaseDate + '&base_time=' + shortBaseTime + '&nx=' + loc.nx + '&ny=' + loc.ny);
                 const resS = await fetch(urlS); const jsonS = await resS.json();
@@ -262,8 +273,9 @@
                 }
             } catch(e) { log('Short API Error: ' + e.message); }
 
-            // B. 중기예보 (4~10일)
+            // B. 중기예보
             try {
+                // [수정] 중기예보 요청 시 CORS 문제나 타임아웃 방지를 위해 Promise.all 사용 안함 (순차 처리)
                 const urlT = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdTemp + '&tmFc=' + midTmFc);
                 const resT = await fetch(urlT); const jsonT = await resT.json();
                 
@@ -288,7 +300,7 @@
                         };
                     }
                 } else {
-                    log("Mid API Fail or No Data");
+                    log("Mid API Fail: " + (jsonT.response?.header?.resultMsg || "Unknown"));
                 }
             } catch(e) { log('Mid API Error: ' + e.message); }
 
@@ -320,10 +332,15 @@
     function initCCTV() {
         if(Hls.isSupported()) {
             const streams = [
-                { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/playlist.m3u8' },
-                { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/playlist.m3u8' },
-                { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv02.stream_360p/playlist.m3u8' }
+                { id: 'v1', url: 'http://211.114.96.121:1935/jejusi7/11-24.stream/playlist.m3u8' }, // 우도
+                { id: 'v2', url: 'http://119.65.216.155:1935/live/cctv03.stream_360p/playlist.m3u8' }, // 윗세오름
+                // [수정] 사용자가 요청한 cctv_05.html에 대응하는 스트리밍 주소로 변경
+                { id: 'v3', url: 'http://119.65.216.155:1935/live/cctv05.stream_360p/playlist.m3u8' } 
             ];
+            // 라벨 업데이트
+            const label3 = document.querySelector('.video-box:nth-child(4) .vid-label');
+            if(label3) label3.innerText = "🛣️ 1100高地道路 (1100 Road)";
+
             streams.forEach(s => {
                 const video = document.getElementById(s.id);
                 if(video) {
@@ -338,10 +355,101 @@
         }
     }
 
+    async function initHallasan() {
+        log("Start initHallasan");
+        const container = document.getElementById('hallasan-list');
+        if(!container) return;
+
+        // [수정] 한글 깨짐 방지를 위해 charset=euc-kr 강제 변환 시도 (Proxies often mess up encoding)
+        const targetUrl = 'https://jeju.go.kr/hallasan/index.htm';
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+
+        try {
+            const res = await fetch(proxyUrl);
+            const buffer = await res.arrayBuffer();
+            const decoder = new TextDecoder('utf-8'); // 요즘 공공웹은 utf-8이 많음. 안되면 euc-kr
+            const text = decoder.decode(buffer);
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+            
+            const trails = [
+                { id: '어리목', name: '어리목' },
+                { id: '영실', name: '영실' },
+                { id: '어승생악', name: '어승생악' },
+                { id: '돈내코', name: '돈내코' },
+                { id: '석굴암', name: '석굴암' },
+                { id: '관음사', name: '관음사' },
+                { id: '성판악', name: '성판악' }
+            ];
+
+            let html = '<div class="grid" style="gap:10px;">';
+            
+            // 더 강력한 파싱: course_list 내부 순회
+            const items = doc.querySelectorAll('.course_list > li');
+            const statusMap = {};
+            
+            if(items.length > 0) {
+                items.forEach(li => {
+                    const txt = li.textContent.replace(/\s+/g, ''); // 공백제거
+                    trails.forEach(t => {
+                        if(txt.includes(t.id)) {
+                            let st = "확인불가";
+                            let col = "#999";
+                            
+                            // 클래스 확인 (가장 정확)
+                            const spanState = li.querySelector('.img_state');
+                            if(spanState) {
+                                const cls = spanState.className;
+                                const innerText = spanState.textContent.trim();
+                                
+                                if(innerText === '정상') { st="정상"; col="#4caf50"; }
+                                else if(innerText.includes('통제')) { st="통제"; col="#f44336"; }
+                                else if(innerText.includes('부분')) { st="부분통제"; col="#ff9800"; }
+                            } else {
+                                // 텍스트로 확인
+                                if(txt.includes("정상")) { st="정상"; col="#4caf50"; }
+                                else if(txt.includes("통제")) { st="통제"; col="#f44336"; }
+                            }
+                            statusMap[t.id] = { status: st, color: col };
+                        }
+                    });
+                });
+            } else {
+                // 파싱 실패 시 텍스트 전체 검색 (최후의 수단)
+                log("Hallasan DOM parsing failed, trying text regex");
+                trails.forEach(t => {
+                    if(text.includes(t.id) && text.includes("정상")) statusMap[t.id] = { status: "정상", color: "#4caf50" };
+                    else if(text.includes(t.id) && text.includes("통제")) statusMap[t.id] = { status: "통제", color: "#f44336" };
+                    else statusMap[t.id] = { status: "정보없음", color: "#999" };
+                });
+            }
+
+            trails.forEach(t => {
+                const info = statusMap[t.id] || { status: '정보없음', color: '#999' };
+                html += `
+                    <div style="width:48%; background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; font-size:13px;">${t.name}</span>
+                        <span style="font-size:12px; font-weight:bold; color:${info.color}; background:${info.color}20; padding:3px 8px; border-radius:10px;">${info.status}</span>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+            document.getElementById('hallasan-status').innerText = "Updated";
+
+        } catch(e) {
+            log("Hallasan Error: " + e.message);
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#f44336;">정보를 가져오는데 실패했습니다.<br>(' + e.message + ')</div>';
+        }
+    }
+
     // 함수 실행 시작
     initCCTV();
     initDaily();
     setTimeout(initWeekly, 1000); // 1초 뒤에 주간예보 실행 (부하 분산)
+    setTimeout(initHallasan, 2000); // 2초 뒤에 한라산 정보 실행
 </script>
 </body>
 </html>
