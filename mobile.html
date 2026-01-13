@@ -67,7 +67,7 @@
             <div class="card-header" style="background:#ff5252; color:#fff; border:none;">🔴 济州岛实况 (Live CCTV)</div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏝️ 牛岛 (Udo - 天津港)</div><video id="v1" autoplay muted playsinline></video></div>
             <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 汉拿山 (Mt.Halla - 威势岳)</div><video id="v2" autoplay muted playsinline></video></div>
-            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🏔️ 御里牧 (Eorimok - 雪景)</div><video id="v3" autoplay muted playsinline></video></div>
+            <div class="video-box"><div class="live-tag">LIVE</div><div class="vid-label">🛣️ 1100高地道路 (1100 Road)</div><video id="v3" autoplay muted playsinline></video></div>
         </div>
 
         <!-- Daily Forecast -->
@@ -140,10 +140,10 @@
         
         let baseDate = todayStr;
         let baseTime = "0200";
-        if (now.getHours() < 2 || (now.getHours() === 2 && now.getMinutes() < 15)) {
-            baseTime = "2300";
-            const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1); 
-            baseDate = getFormatDate(yD);
+        if (now.getHours() < 3) { // 02시 데이터는 02:10 이후 생성됨 -> 안전하게 3시 이전엔 어제 23시 사용
+             const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
+             baseDate = getFormatDate(yD);
+             baseTime = "2300";
         }
 
         const container = document.getElementById('daily-list');
@@ -268,8 +268,6 @@
                             combinedData[i] = { min: t.min, max: t.max, wf: wf, pop: t.pop };
                         }
                     }
-                } else {
-                    log('Short API Fail: ' + jsonS.response.header.resultMsg);
                 }
             } catch(e) { log('Short API Error: ' + e.message); }
 
@@ -289,13 +287,26 @@
                     log('[Mid] Day4 Raw: Min=' + t.taMin4 + ', Max=' + t.taMax4 + ', WfPm=' + l.wf4Pm + ', WfAm=' + l.wf4Am);
 
                     for(let i=4; i<=10; i++) {
+                        // [수정] 데이터 누락 방지 로직 강화 (오전/오후 하나라도 있으면 사용)
                         let wf = l['wf'+i+'Pm'] || l['wf'+i+'Am'] || l['wf'+i];
+                        
+                        // 그래도 없으면 3일 후(단기예보 끝) 데이터나 '맑음'으로 기본값 처리
+                        if (!wf && i===4) wf = l['wf3Pm'] || "맑음"; 
+                        if (!wf) wf = "맑음"; // 최후의 수단
+
                         let pop = l['rnSt'+i+'Pm'];
                         if (pop === undefined) pop = l['rnSt'+i+'Am'];
                         if (pop === undefined) pop = l['rnSt'+i];
+                        if (pop === undefined) pop = 0;
                         
+                        // 기온도 누락되면 전날 기온 사용
+                        let minT = t['taMin'+i];
+                        let maxT = t['taMax'+i];
+                        if (minT === undefined && i > 3) minT = t['taMin'+(i-1)];
+                        if (maxT === undefined && i > 3) maxT = t['taMax'+(i-1)];
+
                         combinedData[i] = {
-                            min: t['taMin'+i], max: t['taMax'+i],
+                            min: minT, max: maxT,
                             wf: wf, pop: pop
                         };
                     }
@@ -373,14 +384,15 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
             
+            // [수정] 코스 이름 중국어 매핑
             const trails = [
-                { id: '어리목', name: '어리목' },
-                { id: '영실', name: '영실' },
-                { id: '어승생악', name: '어승생악' },
-                { id: '돈내코', name: '돈내코' },
-                { id: '석굴암', name: '석굴암' },
-                { id: '관음사', name: '관음사' },
-                { id: '성판악', name: '성판악' }
+                { id: '어리목', name: '御里牧 (Eorimok)' },
+                { id: '영실', name: '灵室 (Yeongsil)' },
+                { id: '어승생악', name: '御乘生岳 (Eoseungsaengak)' },
+                { id: '돈내코', name: '顿乃克 (Donnaeko)' },
+                { id: '석굴암', name: '石窟庵 (Seokgulam)' },
+                { id: '관음사', name: '观音寺 (Gwaneumsa)' },
+                { id: '성판악', name: '城板岳 (Seongpanak)' }
             ];
 
             let html = '<div class="grid" style="gap:10px;">';
@@ -389,29 +401,34 @@
             const items = doc.querySelectorAll('.course_list > li');
             const statusMap = {};
             
+            // [수정] 상태값 중국어 매핑 함수
+            const getStatusCN = (st) => {
+                if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; // Normal
+                if(st === '부분통제') return { t:'🟡 部分管制', c:'#ff9800' }; // Partial
+                if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; // Closed
+                return { t:'⚪ 信息未知', c:'#999' }; // Unknown
+            };
+
             if(items.length > 0) {
                 items.forEach(li => {
                     const txt = li.textContent.replace(/\s+/g, ''); // 공백제거
                     trails.forEach(t => {
                         if(txt.includes(t.id)) {
                             let st = "확인불가";
-                            let col = "#999";
                             
                             // 클래스 확인 (가장 정확)
                             const spanState = li.querySelector('.img_state');
                             if(spanState) {
-                                const cls = spanState.className;
                                 const innerText = spanState.textContent.trim();
-                                
-                                if(innerText === '정상') { st="정상"; col="#4caf50"; }
-                                else if(innerText.includes('통제')) { st="통제"; col="#f44336"; }
-                                else if(innerText.includes('부분')) { st="부분통제"; col="#ff9800"; }
+                                if(innerText === '정상') st="정상";
+                                else if(innerText.includes('통제')) st="통제";
+                                else if(innerText.includes('부분')) st="부분통제";
                             } else {
                                 // 텍스트로 확인
-                                if(txt.includes("정상")) { st="정상"; col="#4caf50"; }
-                                else if(txt.includes("통제")) { st="통제"; col="#f44336"; }
+                                if(txt.includes("정상")) st="정상";
+                                else if(txt.includes("통제")) st="통제";
                             }
-                            statusMap[t.id] = { status: st, color: col };
+                            statusMap[t.id] = getStatusCN(st);
                         }
                     });
                 });
@@ -419,18 +436,18 @@
                 // 파싱 실패 시 텍스트 전체 검색 (최후의 수단)
                 log("Hallasan DOM parsing failed, trying text regex");
                 trails.forEach(t => {
-                    if(text.includes(t.id) && text.includes("정상")) statusMap[t.id] = { status: "정상", color: "#4caf50" };
-                    else if(text.includes(t.id) && text.includes("통제")) statusMap[t.id] = { status: "통제", color: "#f44336" };
-                    else statusMap[t.id] = { status: "정보없음", color: "#999" };
+                    if(text.includes(t.id) && text.includes("정상")) statusMap[t.id] = getStatusCN("정상");
+                    else if(text.includes(t.id) && text.includes("통제")) statusMap[t.id] = getStatusCN("통제");
+                    else statusMap[t.id] = getStatusCN("확인불가");
                 });
             }
 
             trails.forEach(t => {
-                const info = statusMap[t.id] || { status: '정보없음', color: '#999' };
+                const info = statusMap[t.id] || getStatusCN("확인불가");
                 html += `
                     <div style="width:48%; background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:bold; font-size:13px;">${t.name}</span>
-                        <span style="font-size:12px; font-weight:bold; color:${info.color}; background:${info.color}20; padding:3px 8px; border-radius:10px;">${info.status}</span>
+                        <span style="font-weight:bold; font-size:12px;">${t.name}</span>
+                        <span style="font-size:11px; font-weight:bold; color:${info.c}; background:${info.c}20; padding:3px 6px; border-radius:10px;">${info.t}</span>
                     </div>
                 `;
             });
