@@ -401,52 +401,64 @@
             // ... (파싱 로직은 그대로 유지) ...
             
             // 더 강력한 파싱: course_list 내부 순회
-            const items = doc.querySelectorAll('.course_list > li');
+            const items = doc.querySelectorAll('.course_list > li, .traffic_list > li'); // traffic_list 클래스 추가 (간혹 변경됨)
             const statusMap = {};
             
             // [수정] 상태값 중국어 매핑 함수
             const getStatusCN = (st) => {
                 if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; // Normal
-                if(st === '부분통제') return { t:'🟡 部分管制', c:'#ff9800' }; // Partial
+                if(st === '부분통제' || st === '부분') return { t:'🟡 部分管制', c:'#ff9800' }; // Partial
                 if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; // Closed
                 return { t:'⚪ 信息未知', c:'#999' }; // Unknown
             };
 
-            if(items.length > 0) {
-                items.forEach(li => {
-                    const txt = li.textContent.replace(/\s+/g, ''); // 공백제거
-                    trails.forEach(t => {
+            // 전체 텍스트 미리 확보 (HTML 태그 제거 버전)
+            // body 텍스트에서 공백을 모두 제거한 문자열을 만들어두고 검색
+            const rawBodyText = doc.body.textContent.replace(/\s+/g, '');
+
+            trails.forEach(t => {
+                let st = "확인불가";
+                
+                // 1단계: 리스트 아이템(li) 안에서 찾기 (가장 정확)
+                if(items.length > 0) {
+                    items.forEach(li => {
+                        const txt = li.textContent.replace(/\s+/g, ''); // 공백제거
+                        // 예: "성판악:정상" -> "성판악정상"
+                        
                         if(txt.includes(t.id)) {
-                            let st = "확인불가";
-                            
-                            // 클래스 확인 (가장 정확)
+                            // 클래스 확인
                             const spanState = li.querySelector('.img_state');
                             if(spanState) {
                                 const innerText = spanState.textContent.trim();
                                 if(innerText === '정상') st="정상";
                                 else if(innerText.includes('통제')) st="통제";
                                 else if(innerText.includes('부분')) st="부분통제";
-                            } else {
-                                // 텍스트로 확인
+                            } 
+                            // 텍스트 확인
+                            else {
                                 if(txt.includes("정상")) st="정상";
                                 else if(txt.includes("통제")) st="통제";
+                                else if(txt.includes("부분")) st="부분통제";
                             }
-                            statusMap[t.id] = getStatusCN(st);
                         }
                     });
-                });
-            } else {
-                // 파싱 실패 시 텍스트 전체 검색 (최후의 수단)
-                log("Hallasan DOM parsing failed, trying text regex");
-                trails.forEach(t => {
-                    if(text.includes(t.id) && text.includes("정상")) statusMap[t.id] = getStatusCN("정상");
-                    else if(text.includes(t.id) && text.includes("통제")) statusMap[t.id] = getStatusCN("통제");
-                    else statusMap[t.id] = getStatusCN("확인불가");
-                });
-            }
+                }
+
+                // 2단계: 리스트에서 못 찾았으면 전체 텍스트에서 검색 (백업)
+                // 성판악이 목록에 없다면 전체 텍스트에서 "성판악...정상" 패턴 찾기
+                if (st === "확인불가") {
+                    // 예: "성판악정상운영" 또는 "성판악통제"
+                    // 정규식: (코스이름) + (약간의글자) + (상태)
+                    if (rawBodyText.includes(t.id + "정상")) st = "정상";
+                    else if (rawBodyText.includes(t.id + "통제")) st = "통제";
+                    else if (rawBodyText.includes(t.id + "부분")) st = "부분통제";
+                }
+
+                statusMap[t.id] = getStatusCN(st);
+            });
 
             trails.forEach(t => {
-                const info = statusMap[t.id] || getStatusCN("확인불가");
+                const info = statusMap[t.id];
                 html += `
                     <div style="width:48%; background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-weight:bold; font-size:12px;">${t.name}</span>
