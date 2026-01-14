@@ -367,25 +367,44 @@
     }
 
     async function initHallasan() {
-        log("Start initHallasan");
+        log("Start initHallasan (Scraping Mode)");
         const container = document.getElementById('hallasan-list');
+        const statusSpan = document.getElementById('hallasan-status');
         if(!container) return;
 
-        // [수정] 프록시 변경 (allorigins -> corsproxy.io)
+        // [전략]
+        // 1. 타겟: 한라산 국립공원 메인 페이지 (가장 정보가 정확함)
+        // 2. 프록시: corsproxy.io (헤더 문제 없이 원본 HTML 획득 용이)
+        // 3. 인코딩: EUC-KR 및 UTF-8 모두 고려 (TextDecoder 사용)
+        
         const targetUrl = 'https://jeju.go.kr/hallasan/index.htm';
         const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
 
         try {
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error("Network response was not ok");
-            const buffer = await res.arrayBuffer();
-            const decoder = new TextDecoder('utf-8'); 
-            const text = decoder.decode(buffer);
             
+            const buffer = await res.arrayBuffer();
+            
+            // 인코딩 감지 및 디코딩 (제주도청은 UTF-8일 수도, EUC-KR일 수도 있음)
+            // 일단 UTF-8로 시도해보고, '' 문자가 많으면 EUC-KR로 재시도하는 방식이 좋으나,
+            // 최근 공공웹은 UTF-8이 대세. 하지만 오래된 페이지는 EUC-KR.
+            // 여기서는 TextDecoder로 두 번 시도하지 않고, UTF-8을 기본으로 하되 깨짐 대비
+            let decoder = new TextDecoder('utf-8');
+            let text = decoder.decode(buffer);
+            
+            // 만약 '' (Replacement Character)가 너무 많다면 EUC-KR일 수 있음
+            // 간단히: 메타태그 charset 확인
+            if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
+                decoder = new TextDecoder('euc-kr');
+                text = decoder.decode(buffer);
+            }
+
+            // HTML 파싱
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
             
-            // [수정] 코스 이름 중국어 매핑
+            // 코스 정의 (한/중/영)
             const trails = [
                 { id: '어리목', name: '御里牧 (Eorimok)' },
                 { id: '영실', name: '灵室 (Yeongsil)' },
@@ -396,69 +415,68 @@
                 { id: '성판악', name: '城板岳 (Seongpanak)' }
             ];
 
-            let html = '<div class="grid" style="gap:10px;">';
-            
-            // ... (파싱 로직은 그대로 유지) ...
-            
-            // 더 강력한 파싱: course_list 내부 순회
-            const items = doc.querySelectorAll('.course_list > li, .traffic_list > li'); // traffic_list 클래스 추가 (간혹 변경됨)
-            const statusMap = {};
-            
-            // [수정] 상태값 중국어 매핑 함수
+            // 상태값 중국어 매핑
             const getStatusCN = (st) => {
-                if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; // Normal
-                if(st === '부분통제' || st === '부분') return { t:'🟡 部分管制', c:'#ff9800' }; // Partial
-                if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; // Closed
-                return { t:'⚪ 信息未知', c:'#999' }; // Unknown
+                if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; 
+                if(st === '부분') return { t:'🟡 部分管制', c:'#ff9800' };
+                if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; 
+                return { t:'⚪ 信息未知', c:'#999' }; 
             };
 
-            // 전체 텍스트 미리 확보 (HTML 태그 제거 버전)
-            // body 텍스트에서 공백을 모두 제거한 문자열을 만들어두고 검색
-            const rawBodyText = doc.body.textContent.replace(/\s+/g, '');
+            const statusMap = {};
+            const rawText = doc.body.textContent.replace(/\s+/g, ''); // 공백제거 텍스트
 
-            trails.forEach(t => {
-                let st = "확인불가";
-                
-                // 1단계: 리스트 아이템(li) 안에서 찾기 (가장 정확)
-                if(items.length > 0) {
-                    items.forEach(li => {
-                        const txt = li.textContent.replace(/\s+/g, ''); // 공백제거
-                        // 예: "성판악:정상" -> "성판악정상"
-                        
-                        if(txt.includes(t.id)) {
-                            // 클래스 확인
-                            const spanState = li.querySelector('.img_state');
-                            if(spanState) {
-                                const innerText = spanState.textContent.trim();
-                                if(innerText === '정상') st="정상";
-                                else if(innerText.includes('통제')) st="통제";
-                                else if(innerText.includes('부분')) st="부분통제";
-                            } 
-                            // 텍스트 확인
-                            else {
-                                if(txt.includes("정상")) st="정상";
-                                else if(txt.includes("통제")) st="통제";
-                                else if(txt.includes("부분")) st="부분통제";
+            // 1. DOM 파싱 시도 (.course_list li)
+            const items = doc.querySelectorAll('.course_list li, .traffic_list li');
+            if (items.length > 0) {
+                items.forEach(li => {
+                    const txt = li.textContent.replace(/\s+/g, '');
+                    trails.forEach(t => {
+                        if (txt.includes(t.id)) {
+                            let st = '확인불가';
+                            // 이미지/클래스로 상태 확인
+                            if (li.innerHTML.includes('state1') || li.innerHTML.includes('icon_o')) st = '정상';
+                            else if (li.innerHTML.includes('state2') || li.innerHTML.includes('icon_x')) st = '통제';
+                            else if (li.innerHTML.includes('state3')) st = '부분';
+                            
+                            // 텍스트로 확인 (우선순위 낮음)
+                            if (st === '확인불가') {
+                                if (txt.includes('정상')) st = '정상';
+                                else if (txt.includes('통제')) st = '통제';
+                                else if (txt.includes('부분')) st = '부분';
                             }
+                            statusMap[t.id] = getStatusCN(st);
                         }
                     });
-                }
+                });
+            }
 
-                // 2단계: 리스트에서 못 찾았으면 전체 텍스트에서 검색 (백업)
-                // 성판악이 목록에 없다면 전체 텍스트에서 "성판악...정상" 패턴 찾기
-                if (st === "확인불가") {
-                    // 예: "성판악정상운영" 또는 "성판악통제"
-                    // 정규식: (코스이름) + (약간의글자) + (상태)
-                    if (rawBodyText.includes(t.id + "정상")) st = "정상";
-                    else if (rawBodyText.includes(t.id + "통제")) st = "통제";
-                    else if (rawBodyText.includes(t.id + "부분")) st = "부분통제";
+            // 2. 텍스트 정규식 검색 (DOM 파싱 실패 시 백업)
+            trails.forEach(t => {
+                if (!statusMap[t.id]) { // 아직 못 찾았으면
+                    let st = '확인불가';
+                    // "어리목정상", "어리목통제" 패턴 검색
+                    if (rawText.includes(t.id + '정상')) st = '정상';
+                    else if (rawText.includes(t.id + '통제')) st = '통제';
+                    else if (rawText.includes(t.id + '부분')) st = '부분';
+                    
+                    // 전면통제 체크
+                    if (st === '확인불가' && (rawText.includes('전면통제') || rawText.includes('모든탐방로통제'))) {
+                        st = '통제';
+                    }
+                    
+                    statusMap[t.id] = getStatusCN(st);
                 }
-
-                statusMap[t.id] = getStatusCN(st);
             });
 
+            // 렌더링
+            let html = '<div class="grid" style="gap:10px;">';
+            let unknownCount = 0;
+            
             trails.forEach(t => {
-                const info = statusMap[t.id];
+                const info = statusMap[t.id] || getStatusCN('확인불가');
+                if (info.t.includes('未知')) unknownCount++;
+                
                 html += `
                     <div style="width:48%; background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-weight:bold; font-size:12px;">${t.name}</span>
@@ -466,18 +484,31 @@
                     </div>
                 `;
             });
-
             html += '</div>';
+
+            // 모두 실패 시 버튼 표시
+            if (unknownCount === trails.length) {
+                 html += `
+                    <div style="width:100%; text-align:center; margin-top:10px;">
+                        <div style="margin-bottom:5px; font-size:12px; color:#f44336;">数据获取失败 (Parsing Failed)</div>
+                        <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" style="font-size:12px; color:#555; text-decoration:underline;">🌐 点击访问官网 (Visit Official Site)</a>
+                    </div>
+                `;
+            }
+
             container.innerHTML = html;
-            document.getElementById('hallasan-status').innerText = "Updated";
+            if(statusSpan) statusSpan.innerText = "Updated";
 
         } catch(e) {
             log("Hallasan Error: " + e.message);
-            // [수정] 실패 시 '홈페이지 바로가기' 버튼 제공
+            // 에러 발생 시 버튼 표시
             container.innerHTML = `
                 <div style="padding:20px; text-align:center; color:#f44336; font-size:12px;">
-                    <div>获取信息失败 (Fetch Failed)</div>
-                    <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" style="display:inline-block; margin-top:10px; padding:8px 15px; background:#333; color:white; text-decoration:none; border-radius:5px;">🌐 访问官方网站 (Check Website)</a>
+                    <div>连接失败 (Connection Error)</div>
+                    <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
+                       style="display:inline-block; margin-top:10px; padding:8px 15px; background:#333; color:white; text-decoration:none; border-radius:5px;">
+                       🌐 访问官网 (Visit Website)
+                    </a>
                 </div>
             `;
         }
