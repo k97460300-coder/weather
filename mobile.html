@@ -372,45 +372,58 @@
         const statusSpan = document.getElementById('hallasan-status');
         if(!container) return;
 
-        // [핵심] 1순위: 데이터 전용 JSP, 2순위: 메인 페이지 (Fallback)
         const dataUrl = 'https://jeju.go.kr/tool/hallasan/road-body.jsp';
         const mainUrl = 'https://jeju.go.kr/hallasan/index.htm';
         
-        let targetUrl = dataUrl;
-        let proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+        let res;
+        let usedUrl = dataUrl;
 
         try {
-            let res = await fetch(proxyUrl);
+            // [1차 시도] 직접 호출 (앱 Native Bridge가 가로챔)
+            log("Trying direct fetch: " + dataUrl);
+            res = await fetch(dataUrl);
             
-            // 1차 시도 실패 시 메인 페이지로 2차 시도
-            if (!res.ok) {
-                console.log("JSP fetch failed, trying main page...");
-                targetUrl = mainUrl;
-                proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+            if (!res.ok) throw new Error("Direct fetch failed: " + res.status);
+        } catch (e) {
+            log("Direct fetch error: " + e.message);
+            
+            // [2차 시도] 프록시 사용 (웹 환경 or 앱에서 실패 시)
+            try {
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(dataUrl);
+                log("Trying proxy fetch: " + proxyUrl);
                 res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
+            } catch (e2) {
+                // [3차 시도] 메인 페이지 + 프록시 (최후의 수단)
+                log("Proxy data fetch error: " + e2.message);
+                const mainProxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(mainUrl);
+                res = await fetch(mainProxyUrl);
                 if (!res.ok) throw new Error("All sources failed");
             }
+        }
             
-            // [중요] 네이티브 브릿지 응답(JSON)일 경우와 일반 Fetch(Buffer)일 경우 분기 처리
-            let text = '';
-            const contentType = res.headers.get('content-type');
-            
-            if (contentType && contentType.includes('application/json')) {
-                // 네이티브 브릿지를 통했을 때 (이미 텍스트로 변환됨)
+        // 응답 처리 (네이티브 JSON vs 일반 텍스트/바이너리)
+        let text = '';
+        const contentType = res.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            try {
                 text = await res.json();
-                // 혹시 JSON으로 한 번 더 감싸져 있을 경우 대비
                 if (typeof text !== 'string') text = JSON.stringify(text);
-            } else {
-                // 일반 브라우저 환경 (ArrayBuffer -> TextDecoder)
-                const buffer = await res.arrayBuffer();
-                let decoder = new TextDecoder('utf-8');
-                text = decoder.decode(buffer);
-                
-                if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
-                    decoder = new TextDecoder('euc-kr');
-                    text = decoder.decode(buffer);
-                }
+            } catch(e) {
+                // JSON 파싱 실패 시 텍스트로 읽기
+                text = await res.text();
             }
+        } else {
+            const buffer = await res.arrayBuffer();
+            let decoder = new TextDecoder('utf-8');
+            text = decoder.decode(buffer);
+            
+            if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
+                decoder = new TextDecoder('euc-kr');
+                text = decoder.decode(buffer);
+            }
+        }
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
