@@ -112,8 +112,8 @@
 
     const MASTER_KEY = '05988a053767a7a6cc5553d077ce7ea541c60806a0160d5ac2e9119ebe5a61ce'; 
     const API_KEY = MASTER_KEY.trim(); 
-    // [수정] 더 안정적인 프록시 사용 (버튼 클릭 필요 없음)
-    const PROXY = 'https://api.allorigins.win/raw?url=';
+    // [APP 수정] 앱 내부 호출로 변경 (프록시 제거)
+    // const PROXY = 'https://api.allorigins.win/raw?url=';
 
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -151,8 +151,8 @@
 
         for (const loc of locs) {
             try {
-                // api.allorigins.win 사용 시 url 파라미터 인코딩 필요
-                const url = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + baseDate + '&base_time=' + baseTime + '&nx=' + loc.x + '&ny=' + loc.y);
+                // [APP 수정] Direct fetch
+                const url = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + baseDate + '&base_time=' + baseTime + '&nx=' + loc.x + '&ny=' + loc.y;
                 const res = await fetch(url);
                 const json = await res.json();
                 
@@ -239,7 +239,8 @@
             
             // A. 단기예보
             try {
-                const urlS = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + shortBaseDate + '&base_time=' + shortBaseTime + '&nx=' + loc.nx + '&ny=' + loc.ny);
+                // [APP 수정] Direct fetch
+                const urlS = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=' + API_KEY + '&numOfRows=1000&pageNo=1&dataType=JSON&base_date=' + shortBaseDate + '&base_time=' + shortBaseTime + '&nx=' + loc.nx + '&ny=' + loc.ny;
                 const resS = await fetch(urlS); const jsonS = await resS.json();
                 
                 if(jsonS.response && jsonS.response.header.resultCode === '00'){
@@ -273,11 +274,11 @@
 
             // B. 중기예보
             try {
-                // [수정] 중기예보 요청 시 CORS 문제나 타임아웃 방지를 위해 Promise.all 사용 안함 (순차 처리)
-                const urlT = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdTemp + '&tmFc=' + midTmFc);
+                // [APP 수정] Direct fetch
+                const urlT = 'https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdTemp + '&tmFc=' + midTmFc;
                 const resT = await fetch(urlT); const jsonT = await resT.json();
                 
-                const urlL = PROXY + encodeURIComponent('https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdLand + '&tmFc=' + midTmFc);
+                const urlL = 'https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst?serviceKey=' + API_KEY + '&numOfRows=1&pageNo=1&dataType=JSON&regId=' + loc.regIdLand + '&tmFc=' + midTmFc;
                 const resL = await fetch(urlL); const jsonL = await resL.json();
 
                 if(jsonT.response && jsonL.response && jsonT.response.header.resultCode === '00' && jsonL.response.header.resultCode === '00') {
@@ -373,57 +374,37 @@
         if(!container) return;
 
         const dataUrl = 'https://jeju.go.kr/tool/hallasan/road-body.jsp';
-        const mainUrl = 'https://jeju.go.kr/hallasan/index.htm';
         
         let res;
-        let usedUrl = dataUrl;
 
         try {
-            // [1차 시도] 직접 호출 (앱 Native Bridge가 가로챔)
+            // [APP 수정] Direct fetch only
             log("Trying direct fetch: " + dataUrl);
             res = await fetch(dataUrl);
             
             if (!res.ok) throw new Error("Direct fetch failed: " + res.status);
-        } catch (e) {
-            log("Direct fetch error: " + e.message);
             
-            // [2차 시도] 프록시 사용 (웹 환경 or 앱에서 실패 시)
-            try {
-                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(dataUrl);
-                log("Trying proxy fetch: " + proxyUrl);
-                res = await fetch(proxyUrl);
-                if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
-            } catch (e2) {
-                // [3차 시도] 메인 페이지 + 프록시 (최후의 수단)
-                log("Proxy data fetch error: " + e2.message);
-                const mainProxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(mainUrl);
-                res = await fetch(mainProxyUrl);
-                if (!res.ok) throw new Error("All sources failed");
-            }
-        }
+            // 응답 처리 (네이티브 JSON vs 일반 텍스트/바이너리)
+            let text = '';
+            const contentType = res.headers.get('content-type');
             
-        // 응답 처리 (네이티브 JSON vs 일반 텍스트/바이너리)
-        let text = '';
-        const contentType = res.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/json')) {
-            try {
-                text = await res.json();
-                if (typeof text !== 'string') text = JSON.stringify(text);
-            } catch(e) {
-                // JSON 파싱 실패 시 텍스트로 읽기
-                text = await res.text();
-            }
-        } else {
-            const buffer = await res.arrayBuffer();
-            let decoder = new TextDecoder('utf-8');
-            text = decoder.decode(buffer);
-            
-            if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
-                decoder = new TextDecoder('euc-kr');
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    text = await res.json();
+                    if (typeof text !== 'string') text = JSON.stringify(text);
+                } catch(e) {
+                    text = await res.text();
+                }
+            } else {
+                const buffer = await res.arrayBuffer();
+                let decoder = new TextDecoder('utf-8');
                 text = decoder.decode(buffer);
+                
+                if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
+                    decoder = new TextDecoder('euc-kr');
+                    text = decoder.decode(buffer);
+                }
             }
-        }
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
@@ -499,17 +480,28 @@
             if(statusSpan) statusSpan.innerText = "Updated";
 
         } catch(e) {
-            log("Hallasan Error: " + e.message);
-            // 에러 발생 시 버튼 표시
-            container.innerHTML = `
-                <div style="padding:20px; text-align:center; color:#f44336; font-size:12px;">
-                    <div style="margin-bottom:10px;">连接失败 (Connection Error)</div>
-                    <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
-                       style="display:inline-block; padding:12px 25px; background:#333; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">
-                       🌐 访问官网 (Visit Website)
-                    </a>
-                </div>
-            `;
+            log("Direct fetch error: " + e.message);
+            
+            // [Fallback] 프록시 사용 (앱 직접 호출 실패 시)
+            try {
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(dataUrl);
+                log("Trying proxy fetch: " + proxyUrl);
+                res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
+            } catch (e2) {
+                log("Proxy/All sources failed: " + e2.message);
+                // 에러 발생 시 버튼 표시
+                container.innerHTML = `
+                    <div style="padding:20px; text-align:center; color:#f44336; font-size:12px;">
+                        <div style="margin-bottom:10px;">连接失败 (Connection Error)</div>
+                        <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
+                           style="display:inline-block; padding:12px 25px; background:#333; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">
+                           🌐 访问官网 (Visit Website)
+                        </a>
+                    </div>
+                `;
+                return; // Stop execution
+            }
         }
     }
 
