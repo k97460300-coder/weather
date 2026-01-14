@@ -391,14 +391,25 @@
                 if (!res.ok) throw new Error("All sources failed");
             }
             
-            const buffer = await res.arrayBuffer();
-            let decoder = new TextDecoder('utf-8');
-            let text = decoder.decode(buffer);
+            // [중요] 네이티브 브릿지 응답(JSON)일 경우와 일반 Fetch(Buffer)일 경우 분기 처리
+            let text = '';
+            const contentType = res.headers.get('content-type');
             
-            // EUC-KR 처리
-            if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
-                decoder = new TextDecoder('euc-kr');
+            if (contentType && contentType.includes('application/json')) {
+                // 네이티브 브릿지를 통했을 때 (이미 텍스트로 변환됨)
+                text = await res.json();
+                // 혹시 JSON으로 한 번 더 감싸져 있을 경우 대비
+                if (typeof text !== 'string') text = JSON.stringify(text);
+            } else {
+                // 일반 브라우저 환경 (ArrayBuffer -> TextDecoder)
+                const buffer = await res.arrayBuffer();
+                let decoder = new TextDecoder('utf-8');
                 text = decoder.decode(buffer);
+                
+                if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
+                    decoder = new TextDecoder('euc-kr');
+                    text = decoder.decode(buffer);
+                }
             }
 
             const parser = new DOMParser();
