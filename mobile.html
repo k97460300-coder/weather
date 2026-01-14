@@ -455,12 +455,22 @@
             trails.forEach(t => {
                 if (!statusMap[t.id]) { // 아직 못 찾았으면
                     let st = '확인불가';
-                    // "어리목정상", "어리목통제" 패턴 검색
-                    if (rawText.includes(t.id + '정상')) st = '정상';
-                    else if (rawText.includes(t.id + '통제')) st = '통제';
-                    else if (rawText.includes(t.id + '부분')) st = '부분';
                     
-                    // 전면통제 체크
+                    // [수정] 텍스트 매칭 로직 개선 (이미지 분석 기반)
+                    // 실제 텍스트: "어리목탐방로 ... (중간 내용) ... 정상운영"
+                    // 따라서 "어리목"을 찾고, 그 위치로부터 가장 가까운 뒤쪽의 상태 키워드를 찾아야 함.
+                    
+                    const nameIndex = rawText.indexOf(t.id); // '어리목' 위치 찾기
+                    if (nameIndex !== -1) {
+                        // 이름 뒤 200글자 정도만 잘라서 검사 (너무 멀면 다른 코스 정보일 수 있음)
+                        const searchRange = rawText.substring(nameIndex, nameIndex + 300);
+                        
+                        if (searchRange.includes('정상운영') || searchRange.includes('정상')) st = '정상';
+                        else if (searchRange.includes('전면통제') || searchRange.includes('통제')) st = '통제';
+                        else if (searchRange.includes('부분통제') || searchRange.includes('부분')) st = '부분';
+                    }
+                    
+                    // 전면통제 체크 (전체 텍스트 기준)
                     if (st === '확인불가' && (rawText.includes('전면통제') || rawText.includes('모든탐방로통제'))) {
                         st = '통제';
                     }
