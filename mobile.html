@@ -372,50 +372,48 @@
         const statusSpan = document.getElementById('hallasan-status');
         if(!container) return;
 
-        // [전략]
-        // 1. 타겟: 한라산 국립공원 메인 페이지 (가장 정보가 정확함)
-        // 2. 프록시: corsproxy.io (헤더 문제 없이 원본 HTML 획득 용이)
-        // 3. 인코딩: EUC-KR 및 UTF-8 모두 고려 (TextDecoder 사용)
+        // [핵심] 1순위: 데이터 전용 JSP, 2순위: 메인 페이지 (Fallback)
+        const dataUrl = 'https://jeju.go.kr/tool/hallasan/road-body.jsp';
+        const mainUrl = 'https://jeju.go.kr/hallasan/index.htm';
         
-        const targetUrl = 'https://jeju.go.kr/hallasan/index.htm';
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+        let targetUrl = dataUrl;
+        let proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
 
         try {
-            const res = await fetch(proxyUrl);
-            if (!res.ok) throw new Error("Network response was not ok");
+            let res = await fetch(proxyUrl);
+            
+            // 1차 시도 실패 시 메인 페이지로 2차 시도
+            if (!res.ok) {
+                console.log("JSP fetch failed, trying main page...");
+                targetUrl = mainUrl;
+                proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+                res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error("All sources failed");
+            }
             
             const buffer = await res.arrayBuffer();
-            
-            // 인코딩 감지 및 디코딩 (제주도청은 UTF-8일 수도, EUC-KR일 수도 있음)
-            // 일단 UTF-8로 시도해보고, '' 문자가 많으면 EUC-KR로 재시도하는 방식이 좋으나,
-            // 최근 공공웹은 UTF-8이 대세. 하지만 오래된 페이지는 EUC-KR.
-            // 여기서는 TextDecoder로 두 번 시도하지 않고, UTF-8을 기본으로 하되 깨짐 대비
             let decoder = new TextDecoder('utf-8');
             let text = decoder.decode(buffer);
             
-            // 만약 '' (Replacement Character)가 너무 많다면 EUC-KR일 수 있음
-            // 간단히: 메타태그 charset 확인
+            // EUC-KR 처리
             if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
                 decoder = new TextDecoder('euc-kr');
                 text = decoder.decode(buffer);
             }
 
-            // HTML 파싱
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
             
-            // 코스 정의 (한/중/영)
             const trails = [
                 { id: '어리목', name: '御里牧 (Eorimok)' },
                 { id: '영실', name: '灵室 (Yeongsil)' },
                 { id: '어승생악', name: '御乘生岳 (Eoseungsaengak)' },
                 { id: '돈내코', name: '顿乃克 (Donnaeko)' },
-                { id: '석굴암', name: '石窟庵 (Seokgulam)' },
+                { id: '석굴암', name: '石굴암 (Seokgulam)' },
                 { id: '관음사', name: '观音寺 (Gwaneumsa)' },
                 { id: '성판악', name: '城板岳 (Seongpanak)' }
             ];
 
-            // 상태값 중국어 매핑
             const getStatusCN = (st) => {
                 if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; 
                 if(st === '부분') return { t:'🟡 部分管制', c:'#ff9800' };
@@ -423,55 +421,37 @@
                 return { t:'⚪ 信息未知', c:'#999' }; 
             };
 
-            // [최종 수정] 사용자 제공 HTML 소스 기반 정규식 파싱 (가장 확실함)
-            // 소스 패턴: <dt>어리목탐방로</dt>...<dd class="situation">정상운영</dd>
-            
-            // HTML 문자열 원본을 그대로 가져옴 (태그 포함)
-            const htmlContent = doc.body.innerHTML; 
-            
+            const statusMap = {}; 
+            const dlList = doc.querySelectorAll('.main-visit-list');
+
             trails.forEach(t => {
                 let st = '확인불가';
+                const keyword = t.id.trim();
                 
-                // 정규식 설명:
-                // 1. 코스 이름(t.name의 앞부분, 예: '어리목')이 포함된 <dt> 태그를 찾음
-                // 2. 그 뒤에 오는 <dd class="situation"> 태그를 찾음 (중간에 어떤 태그가 있든 건너뜀)
-                // 3. 그 안의 텍스트(상태값)를 추출
-                
-                // 예: /<dt>[^<]*어리목[^<]*<\/dt>[\s\S]*?<dd class="situation">([^<]*)<\/dd>/i
-                const keyword = t.id.split(' ')[0]; // "어리목"
-                const regex = new RegExp(`<dt>[^<]*${keyword}[^<]*<\\/dt>[\\s\\S]*?<dd class="situation">([^<]*)<\\/dd>`, 'i');
-                
-                const match = htmlContent.match(regex);
-                
-                if (match && match[1]) {
-                    const statusText = match[1].trim(); // "정상운영"
-                    
-                    if (statusText.includes('정상')) st = '정상';
-                    else if (statusText.includes('전면통제') || statusText.includes('통제')) st = '통제';
-                    else if (statusText.includes('부분')) st = '부분';
-                } else {
-                    // 백업: 텍스트 단순 검색 (태그 무시하고 '어리목' 뒤에 '정상'이 있는지)
-                    // (이전 로직 재활용)
-                    const rawText = doc.body.textContent.replace(/\s+/g, '');
-                    const nameIndex = rawText.indexOf(keyword);
-                    if (nameIndex !== -1) {
-                        const searchRange = rawText.substring(nameIndex, nameIndex + 300);
-                        if (searchRange.includes('정상운영') || searchRange.includes('정상')) st = '정상';
-                        else if (searchRange.includes('통제')) st = '통제';
+                let targetDl = null;
+                for(let dl of dlList) {
+                    if(dl.textContent.includes(keyword)) {
+                        targetDl = dl;
+                        break;
                     }
                 }
-                
+
+                if (targetDl) {
+                    const situationDd = targetDl.querySelector('.situation');
+                    const statusText = situationDd ? situationDd.textContent : targetDl.textContent;
+                    
+                    if (statusText.includes('정상')) st = '정상';
+                    else if (statusText.includes('통제')) st = '통제';
+                    else if (statusText.includes('부분')) st = '부분';
+                }
                 statusMap[t.id] = getStatusCN(st);
             });
 
             // 렌더링
             let html = '<div class="grid" style="gap:10px; margin-bottom:15px;">'; 
-            let unknownCount = 0;
             
             trails.forEach(t => {
                 const info = statusMap[t.id] || getStatusCN('확인불가');
-                if (info.t.includes('未知')) unknownCount++;
-                
                 html += `
                     <div style="width:100%; background:#f8f9fa; padding:12px 15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e9ecef; box-sizing:border-box;">
                         <span style="font-weight:800; font-size:13px; color:#2d3436; flex:1;">${t.name}</span>
@@ -481,7 +461,6 @@
             });
             html += '</div>';
 
-            // 하단 버튼 고정
             html += `
                 <div style="margin-top:5px; border-top:1px dashed #eee; padding-top:12px;">
                     <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
@@ -493,14 +472,14 @@
             `;
 
             container.innerHTML = html;
-            if(statusSpan) statusSpan.innerText = "Real-time";
+            if(statusSpan) statusSpan.innerText = "Updated";
 
         } catch(e) {
             log("Hallasan Error: " + e.message);
             // 에러 발생 시 버튼 표시
             container.innerHTML = `
                 <div style="padding:20px; text-align:center; color:#f44336; font-size:12px;">
-                    <div style="margin-bottom:10px;">连接 실패 (Connection Error)</div>
+                    <div style="margin-bottom:10px;">连接失败 (Connection Error)</div>
                     <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
                        style="display:inline-block; padding:12px 25px; background:#333; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">
                        🌐 访问官网 (Visit Website)
