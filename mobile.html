@@ -371,74 +371,159 @@
     }
     
     async function initHallasan() {
+        log("Start initHallasan (Robust Mode)");
         const container = document.getElementById('hallasan-list');
         const statusSpan = document.getElementById('hallasan-status');
         if(!container) return;
 
         const dataUrl = 'https://jeju.go.kr/tool/hallasan/road-body.jsp';
+        const mainUrl = 'https://jeju.go.kr/hallasan/index.htm';
+        const proxyBase = 'https://api.allorigins.win/raw?url=';
         
+        let res;
+        let usedSource = 'Direct';
+
         try {
-            const res = await fetch(dataUrl);
-            if (!res.ok) throw new Error("Direct fetch failed");
+            // [1차 시도] 직접 호출 (road-body.jsp)
+            log("Trying 1st (Direct): " + dataUrl);
+            res = await fetch(dataUrl);
+            if (!res.ok) throw new Error("Direct fetch failed: " + res.status);
+            usedSource = 'Direct Body';
+
+        } catch (e1) {
+            log("1st failed: " + e1.message);
             
-            const buffer = await res.arrayBuffer();
-            let decoder = new TextDecoder('euc-kr');
-            const text = decoder.decode(buffer);
+            // [2차 시도] 프록시 호출 (road-body.jsp)
+            try {
+                const proxyUrl = proxyBase + encodeURIComponent(dataUrl);
+                log("Trying 2nd (Proxy Body): " + proxyUrl);
+                res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error("Proxy body failed: " + res.status);
+                usedSource = 'Proxy Body';
+            } catch (e2) {
+                log("2nd failed: " + e2.message);
 
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(text, 'text/html');
-            
-            const trails = [
-                { id: '어리목', name: '御里牧 (Eorimok)' }, { id: '영실', name: '灵室 (Yeongsil)' },
-                { id: '어승생악', name: '御乘生岳 (Eoseungsaengak)' }, { id: '돈내코', name: '顿乃克 (Donnaeko)' },
-                { id: '석굴암', name: '石窟庵 (Seokgulam)' }, { id: '관음사', name: '观音寺 (Gwaneumsa)' },
-                { id: '성판악', name: '城板岳 (Seongpanak)' }
-            ];
-
-            const getStatusCN = (st) => {
-                if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; 
-                if(st === '부분') return { t:'🟡 部分管制', c:'#ff9800' };
-                if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; 
-                return { t:'⚪ 信息未知', c:'#999' }; 
-            };
-
-            let html = '<div class="grid" style="gap:10px; margin-bottom:15px; display:block;">'; 
-            
-            const dlList = doc.querySelectorAll('.main-visit-list');
-            trails.forEach(t => {
-                let st = '확인불가';
-                let targetDl = Array.from(dlList).find(dl => dl.textContent.includes(t.id.trim()));
-
-                if (targetDl) {
-                    const statusText = targetDl.querySelector('.situation')?.textContent || targetDl.textContent;
-                    if (statusText.includes('정상')) st = '정상';
-                    else if (statusText.includes('통제')) st = '통제';
-                    else if (statusText.includes('부분')) st = '부분';
+                // [3차 시도] 메인 페이지 프록시 호출 (index.htm)
+                try {
+                    const mainProxyUrl = proxyBase + encodeURIComponent(mainUrl);
+                    log("Trying 3rd (Proxy Main): " + mainProxyUrl);
+                    res = await fetch(mainProxyUrl);
+                    if (!res.ok) throw new Error("All sources failed");
+                    usedSource = 'Proxy Main';
+                } catch (e3) {
+                    log("3rd failed: " + e3.message);
+                    container.innerHTML = `
+                        <div style="padding:20px; text-align:center; color:#f44336; font-size:12px;">
+                            <div style="margin-bottom:10px;">데이터를 가져올 수 없습니다.</div>
+                            <div style="font-size:10px; color:#999; margin-bottom:15px;">(${e3.message})</div>
+                            <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
+                               style="display:inline-block; padding:12px 25px; background:#333; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">
+                               🌐 한라산 공식 홈페이지 이동
+                            </a>
+                        </div>
+                    `;
+                    if(statusSpan) statusSpan.innerText = "Error";
+                    return;
                 }
-                const info = getStatusCN(st);
-                html += `
-                    <div style="width:100%; background:#f8f9fa; padding:12px 15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e9ecef; box-sizing:border-box; margin-bottom: 8px;">
-                        <span style="font-weight:800; font-size:13px; color:#2d3436; flex:1;">${t.name}</span>
-                        <span style="font-size:11px; font-weight:bold; color:${info.c}; background:${info.c}15; padding:4px 10px; border-radius:20px; border:1px solid ${info.c}30; white-space:nowrap;">${info.t}</span>
-                    </div>`;
-            });
-            html += '</div>';
-
-            html += `
-                <div style="margin-top:5px; border-top:1px dashed #eee; padding-top:12px;">
-                    <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
-                       style="display:flex; align-items:center; justify-content:center; gap:5px; width:100%; background:#4a69bd; color:white; text-decoration:none; 
-                              padding:12px 0; border-radius:8px; text-align:center; font-weight:bold; font-size:13px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        🌐 访问汉拿山官网
-                    </a>
-                </div>`;
-            container.innerHTML = html;
-            if(statusSpan) statusSpan.innerText = "Updated";
-        } catch(e) {
-            log(e.message);
-            container.innerHTML = `<div style="padding:20px; text-align:center; color:#f44336; font-size:12px;"><div style="margin-bottom:10px;">데이터를 가져올 수 없습니다.</div><a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" style="color:#333;">공식 홈페이지 이동</a></div>`;
-            if(statusSpan) statusSpan.innerText = "Error";
+            }
         }
+            
+        // 응답 텍스트 추출 및 디코딩
+        let text = '';
+        try {
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const json = await res.json();
+                text = (typeof json === 'string') ? json : JSON.stringify(json);
+            } else {
+                const buffer = await res.arrayBuffer();
+                let decoder = new TextDecoder('utf-8');
+                text = decoder.decode(buffer);
+                if (text.includes('charset=euc-kr') || text.includes('charset=EUC-KR')) {
+                    decoder = new TextDecoder('euc-kr');
+                    text = decoder.decode(buffer);
+                }
+            }
+        } catch (parseErr) {
+            log("Text decoding failed: " + parseErr.message);
+            return;
+        }
+
+        // DOM 파싱
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        
+        const trails = [
+            { id: '어리목', name: '御里牧 (Eorimok)' },
+            { id: '영실', name: '灵室 (Yeongsil)' },
+            { id: '어승생악', name: '御乘生岳 (Eoseungsaengak)' },
+                            { id: '돈내코', name: '顿乃克 (Donnaeko)' },
+                            { id: '석굴암', name: '石窟庵 (Seokgulam)' },
+                            { id: '관음사', name: '观音寺 (Gwaneumsa)' },            { id: '성판악', name: '城板岳 (Seongpanak)' }
+        ];
+
+        const getStatusCN = (st) => {
+            if(st === '정상') return { t:'🟢 正常运营', c:'#4caf50' }; 
+            if(st === '부분') return { t:'🟡 部分管制', c:'#ff9800' };
+            if(st === '통제') return { t:'🔴 全面管制', c:'#f44336' }; 
+            return { t:'⚪ 信息未知', c:'#999' }; 
+        };
+
+        const statusMap = {}; 
+        
+        // 스크래핑 로직: .main-visit-list (공통)
+        const dlList = doc.querySelectorAll('.main-visit-list');
+
+        trails.forEach(t => {
+            let st = '확인불가';
+            const keyword = t.id.trim();
+            
+            let targetDl = null;
+            for(let dl of dlList) {
+                if(dl.textContent.includes(keyword)) {
+                    targetDl = dl;
+                    break;
+                }
+            }
+
+            if (targetDl) {
+                const situationDd = targetDl.querySelector('.situation');
+                const statusText = situationDd ? situationDd.textContent : targetDl.textContent;
+                
+                if (statusText.includes('정상')) st = '정상';
+                else if (statusText.includes('통제')) st = '통제';
+                else if (statusText.includes('부분')) st = '부분';
+            }
+            statusMap[t.id] = getStatusCN(st);
+        });
+
+        // 렌더링
+        let html = '<div class="grid" style="gap:10px; margin-bottom:15px; display:block;">'; 
+        
+        trails.forEach(t => {
+            const info = statusMap[t.id] || getStatusCN('확인불가');
+            html += `
+                <div style="width:100%; background:#f8f9fa; padding:12px 15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e9ecef; box-sizing:border-box; margin-bottom: 8px;">
+                    <span style="font-weight:800; font-size:13px; color:#2d3436; flex:1;">${t.name}</span>
+                    <span style="font-size:11px; font-weight:bold; color:${info.c}; background:${info.c}15; padding:4px 10px; border-radius:20px; border:1px solid ${info.c}30; white-space:nowrap;">${info.t}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        html += `
+            <div style="margin-top:5px; border-top:1px dashed #eee; padding-top:12px;">
+                <a href="https://jeju.go.kr/hallasan/index.htm" target="_blank" 
+                   style="display:flex; align-items:center; justify-content:center; gap:5px; width:100%; background:#4a69bd; color:white; text-decoration:none; 
+                          padding:12px 0; border-radius:8px; text-align:center; font-weight:bold; font-size:13px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    🌐 访问汉拿山官网
+                </a>
+            </div>
+            <div style="text-align:center; font-size:9px; color:#ccc; margin-top:5px;">Source: ${usedSource}</div>
+        `;
+
+        container.innerHTML = html;
+        if(statusSpan) statusSpan.innerText = "Updated";
     }
 
     // Init functions
