@@ -266,13 +266,15 @@
             }
 
             const h = now.getHours();
+            const m = now.getMinutes();
             let midTmFc;
-            if (h < 9) {
+
+            if (h < 6 || (h === 6 && m < 15)) { // Before 6:15 AM
                  const yD = new Date(yyyy, now.getMonth(), now.getDate() - 1);
                  midTmFc = getFormatDate(yD) + '1800';
-            } else if (h < 21) { 
+            } else if (h < 18 || (h === 18 && m < 15)) { // Between 6:15 AM and 6:15 PM
                  midTmFc = todayStr + '0600'; 
-            } else { 
+            } else { // After 6:15 PM
                  midTmFc = todayStr + '1800'; 
             }
 
