@@ -564,12 +564,10 @@
             const statusSpan = document.getElementById(statusId);
             if (!container || !statusSpan) return;
 
-            const proxyBase = 'https://api.allorigins.win/raw?url=';
-            const proxiedUrl = proxyBase + encodeURIComponent(url);
-            log(`Fetching ${type} flights from: ` + proxiedUrl);
+            log(`Fetching ${type} flights from: ` + url);
 
             try {
-                const res = await fetch(proxiedUrl);
+                const res = await fetch(url);
                 const text = await res.text();
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(text, "text/xml");
@@ -613,7 +611,7 @@
         }
 
         async function initDepartureFlights() {
-            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&dep_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
             await fetchFlightData(depUrl, 'flight-list-dep', 'flight-dep-status', 'dep');
         }
 
