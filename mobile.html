@@ -23,7 +23,7 @@
         }
         .container {
              display: flex; flex-direction: row; height: 100%;
-             width: 600vw; /* 6 cards */
+             width: 800vw; /* 8 cards */
         }
         .card {
             flex: 0 0 100vw;
@@ -146,6 +146,28 @@
                     <div style="padding:20px; text-align:center; color:#999; font-size:12px;">正在获取实时管制信息...</div>
                 </div>
                 <footer>Data provided by Korea Meteorological Administration</footer>
+            </div>
+        </div>
+
+        <!-- Card 7: Flight Departures -->
+        <div class="card">
+            <div class="card-inner">
+                <div class="card-header">✈️ 国际线出发信息 <span class="badge" id="flight-dep-status">Updating</span></div>
+                <div class="card-content" id="flight-list-dep">
+                    <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取出发信息...</div>
+                </div>
+                 <footer>Data provided by Korea Airports Corporation</footer>
+            </div>
+        </div>
+        
+        <!-- Card 8: Flight Arrivals -->
+        <div class="card">
+            <div class="card-inner">
+                <div class="card-header">✈️ 国际线到达信息 <span class="badge" id="flight-arr-status">Updating</span></div>
+                <div class="card-content" id="flight-list-arr">
+                    <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取到达信息...</div>
+                </div>
+                 <footer>Data provided by Korea Airports Corporation</footer>
             </div>
         </div>
     </div>
@@ -510,6 +532,95 @@
         initDaily();
         setTimeout(initWeekly, 1000);
         setTimeout(initHallasan, 2000);
+        setTimeout(initDepartureFlights, 2500);
+        setTimeout(initArrivalFlights, 3000);
+
+        function createFlightItemHTML(flight, type) {
+            const rmk = flight.rmk || '';
+            const status = rmk.includes('지연') ? { t: '지연', c: '#ff9800' } : 
+                           rmk.includes('결항') ? { t: '결항', c: '#f44336' } :
+                           { t: rmk, c: '#2e7d32' };
+            
+            const route = type === 'dep' ? `To: ${flight.city} (${flight.airport})` : `From: ${flight.depcity} (${flight.depairport})`;
+
+            return `
+                <div class="flight-info-item">
+                    <div class="flight-details">
+                        <div class="flight-id-container">
+                            <span class="airline-tag">${flight.airline}</span>
+                            ${flight.flightId}
+                        </div>
+                        <div class="flight-route">${route}</div>
+                    </div>
+                    <div class="flight-status-container">
+                        <div class="flight-time">${flight.std}</div>
+                        <span class="flight-remark" style="color:${status.c};">${status.t}</span>
+                    </div>
+                </div>`;
+        }
+
+        async function fetchFlightData(url, containerId, statusId, type) {
+            const container = document.getElementById(containerId);
+            const statusSpan = document.getElementById(statusId);
+            if (!container || !statusSpan) return;
+
+            const proxyBase = 'https://api.allorigins.win/raw?url=';
+            const proxiedUrl = proxyBase + encodeURIComponent(url);
+            log(`Fetching ${type} flights from: ` + proxiedUrl);
+
+            try {
+                const res = await fetch(proxiedUrl);
+                const text = await res.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+
+                const resultCodeNode = xmlDoc.querySelector("resultCode");
+                if (!resultCodeNode || resultCodeNode.textContent !== '00') {
+                    const msg = xmlDoc.querySelector("resultMsg")?.textContent || 'Unknown API Error';
+                    throw new Error(msg);
+                }
+
+                const items = xmlDoc.querySelectorAll("item");
+                let relevantFlights = [];
+                items.forEach(item => {
+                    const rmk = item.querySelector("rmk")?.textContent || '';
+                    if (rmk.includes('지연') || rmk.includes('결항')) {
+                        relevantFlights.push({
+                            airline: item.querySelector("airline")?.textContent || '',
+                            flightId: item.querySelector("flightId")?.textContent || '',
+                            city: item.querySelector("city")?.textContent || '',
+                            airport: item.querySelector("airport")?.textContent || '',
+                            depcity: item.querySelector("depcity")?.textContent || '',
+                            depairport: item.querySelector("depairport")?.textContent || '',
+                            std: item.querySelector("std")?.textContent || '',
+                            rmk: rmk
+                        });
+                    }
+                });
+
+                if (relevantFlights.length > 0) {
+                    container.innerHTML = '<div style="padding: 10px;">' + relevantFlights.map(f => createFlightItemHTML(f, type)).join('') + '</div>';
+                    statusSpan.innerText = "Updated";
+                } else {
+                    container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">현재 지연 또는 결항된 항공편이 없습니다.</div>`;
+                    statusSpan.innerText = "No Delays";
+                }
+            } catch (e) {
+                log(`Flight Status Error (${type}): ${e.message}`);
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">정보를 가져오는 데 실패했습니다: ${e.message}</div>`;
+                statusSpan.innerText = "Error";
+            }
+        }
+
+        async function initDepartureFlights() {
+            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&dep_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            await fetchFlightData(depUrl, 'flight-list-dep', 'flight-dep-status', 'dep');
+        }
+
+        async function initArrivalFlights() {
+            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            await fetchFlightData(arrUrl, 'flight-list-arr', 'flight-arr-status', 'arr');
+        }
     </script>
 </body>
 </html>
