@@ -388,7 +388,7 @@
                     const maxT = (w.max !== undefined && w.max !== -100) ? w.max : '-';
                     const pop = (w.pop !== undefined) ? w.pop : 0;
 
-                    html += `<div class="col"><div class="time">${label}<br><span style="font-size:9px; color:#aaa;">+${i}D</span></div><div class="icon">${icon}</div><div class="temp"><span class="high">${maxT}</span>/<span class="low">${minT}</span></div><div class="precip ${pop>0?'precip-blue':''}">${pop}</div></div>`;
+                    html += `<div class="col"><div class="time">${label}<br><span style="font-size:9px; color:#aaa;">+${i}D</span></div><div class="icon">${icon}</div><div class="temp"><span class="high">${maxT}</span>/<span class="low">${minT}</span></div><div class="precip ${pop>0?'precip-blue':''}">${pop}%</div></div>`;
                 }
                 targetContainer.innerHTML += `<div class="weather-section"><div class="loc-info"><span class="loc-name">${loc.name}</span><span class="loc-sub">${loc.sub}</span></div><div class="grid weekly-grid">${html}</div></div>`;
             }
@@ -564,10 +564,12 @@
             const statusSpan = document.getElementById(statusId);
             if (!container || !statusSpan) return;
 
-            log(`Fetching ${type} flights from: ` + url);
+            const proxyBase = 'https://cors-anywhere.herokuapp.com/';
+            const proxiedUrl = proxyBase + url;
+            log(`Fetching ${type} flights from: ` + proxiedUrl);
 
             try {
-                const res = await fetch(url);
+                const res = await fetch(proxiedUrl);
                 const text = await res.text();
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(text, "text/xml");
@@ -611,12 +613,14 @@
         }
 
         async function initDepartureFlights() {
-            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const decodedApiKey = decodeURIComponent(API_KEY);
+            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${decodedApiKey}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
             await fetchFlightData(depUrl, 'flight-list-dep', 'flight-dep-status', 'dep');
         }
 
         async function initArrivalFlights() {
-            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const decodedApiKey = decodeURIComponent(API_KEY);
+            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${decodedApiKey}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
             await fetchFlightData(arrUrl, 'flight-list-arr', 'flight-arr-status', 'arr');
         }
     </script>
