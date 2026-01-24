@@ -313,13 +313,14 @@
                         const tempDays = {};
                         jsonS.response.body.items.item.forEach(it => {
                             const date = it.fcstDate;
-                            if(!tempDays[date]) tempDays[date] = { min:100, max:-100, sky:1, pty:0, pop:0, temps:[] };
+                            if(!tempDays[date]) tempDays[date] = { min:100, max:-100, temps:[], hourlyData: Array(24).fill(null).map(() => ({})) };
+                            
                             if(it.category === 'TMN') tempDays[date].min = parseFloat(it.fcstValue);
                             if(it.category === 'TMX') tempDays[date].max = parseFloat(it.fcstValue);
                             if(it.category === 'TMP') tempDays[date].temps.push(parseFloat(it.fcstValue));
-                            if(it.category === 'POP') tempDays[date].pop = Math.max(tempDays[date].pop, parseInt(it.fcstValue));
-                            if(it.category === 'PTY') tempDays[date].pty = Math.max(tempDays[date].pty, parseInt(it.fcstValue));
-                            if(it.category === 'SKY') tempDays[date].sky = parseInt(it.category === 'SKY' && it.fcstTime === '0000' ? 0 : parseInt(it.fcstValue)); // Force SKY to 0 if at midnight for accurate icon selection.
+
+                            const h = parseInt(it.fcstTime.slice(0, 2));
+                            tempDays[date].hourlyData[h][it.category] = it.fcstValue;
                         });
                         
                         for(let i=0; i<=3; i++){
@@ -329,10 +330,37 @@
                             if(t) {
                                 if(t.min === 100 && t.temps.length > 0) t.min = Math.min(...t.temps);
                                 if(t.max === -100 && t.temps.length > 0) t.max = Math.max(...t.temps);
-                                let wf = "맑음";
-                                if(t.pty > 0) { if(t.pty===3) wf="눈"; else wf="비"; } 
-                                else { if(t.sky===3) wf="구름많음"; else if(t.sky===4) wf="흐림"; }
-                                combinedData[i] = { min: t.min, max: t.max, wf: wf, pop: t.pop };
+
+                                const weatherCounts = {};
+                                let dominantWeather = "맑음";
+                                let maxPop = 0;
+
+                                for (let h = 9; h <= 22; h++) {
+                                    const hourData = t.hourlyData[h] || {};
+                                    const pty = parseInt(hourData.PTY || 0);
+                                    const sky = parseInt(hourData.SKY || 1);
+                                    const pop = parseInt(hourData.POP || 0);
+                                    if (pop > maxPop) maxPop = pop;
+
+                                    let weatherKey = '맑음';
+                                    if (pty > 0) {
+                                        weatherKey = (pty === 3) ? '눈' : '비';
+                                    } else {
+                                        if (sky === 4) weatherKey = '흐림';
+                                        else if (sky === 3) weatherKey = '구름많음';
+                                    }
+                                    weatherCounts[weatherKey] = (weatherCounts[weatherKey] || 0) + 1;
+                                }
+
+                                let maxCount = 0;
+                                for (const weather in weatherCounts) {
+                                    if (weatherCounts[weather] > maxCount) {
+                                        maxCount = weatherCounts[weather];
+                                        dominantWeather = weather;
+                                    }
+                                }
+                                
+                                combinedData[i] = { min: t.min, max: t.max, wf: dominantWeather, pop: maxPop };
                             }
                         }
                     }
@@ -613,14 +641,12 @@
         }
 
         async function initDepartureFlights() {
-            const decodedApiKey = decodeURIComponent(API_KEY);
-            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${decodedApiKey}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
             await fetchFlightData(depUrl, 'flight-list-dep', 'flight-dep-status', 'dep');
         }
 
         async function initArrivalFlights() {
-            const decodedApiKey = decodeURIComponent(API_KEY);
-            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${decodedApiKey}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
             await fetchFlightData(arrUrl, 'flight-list-arr', 'flight-arr-status', 'arr');
         }
     </script>
