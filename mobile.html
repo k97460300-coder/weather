@@ -121,7 +121,7 @@
         <!-- Card 4: Weekly Forecast 1/2 -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">📅 未来10天长期预报 (1/2) <span class="badge" id="weekly-status-1">Updating</span></div>
+                <div class="card-header">📅 未来10天长期预报 (1/2) <span class="badge" id="weekly-status-1">更新中</span></div>
                 <div class="card-content" id="weekly-list-1">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取长期预报数据...</div>
                 </div>
@@ -131,7 +131,7 @@
         <!-- Card 5: Weekly Forecast 2/2 -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">📅 未来10天长期预报 (2/2) <span class="badge" id="weekly-status-2">Updating</span></div>
+                <div class="card-header">📅 未来10天长期预报 (2/2) <span class="badge" id="weekly-status-2">更新中</span></div>
                 <div class="card-content" id="weekly-list-2">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取长期预报数据...</div>
                 </div>
@@ -141,7 +141,7 @@
         <!-- Card 6: Hallasan Status -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">🏔️ 汉拿山探访路管制信息 <span class="badge" id="hallasan-status">Checking</span></div>
+                <div class="card-header">🏔️ 汉拿山探访路管制信息 <span class="badge" id="hallasan-status">查询中</span></div>
                 <div class="card-content" id="hallasan-list">
                     <div style="padding:20px; text-align:center; color:#999; font-size:12px;">正在获取实时管制信息...</div>
                 </div>
@@ -152,7 +152,7 @@
         <!-- Card 7: Flight Departures -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">✈️ 国际线出发信息 <span class="badge" id="flight-dep-status">Updating</span></div>
+                <div class="card-header">✈️ 国际线出发信息 <span class="badge" id="flight-dep-status">更新中</span></div>
                 <div class="card-content" id="flight-list-dep">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取出发信息...</div>
                 </div>
@@ -163,7 +163,7 @@
         <!-- Card 8: Flight Arrivals -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">✈️ 国际线到达信息 <span class="badge" id="flight-arr-status">Updating</span></div>
+                <div class="card-header">✈️ 国际线到达信息 <span class="badge" id="flight-arr-status">更新中</span></div>
                 <div class="card-content" id="flight-list-arr">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取到达信息...</div>
                 </div>
@@ -268,8 +268,8 @@
         async function initWeekly() {
             const container1 = document.getElementById('weekly-list-1');
             const container2 = document.getElementById('weekly-list-2');
-            if (document.getElementById('weekly-status-1')) document.getElementById('weekly-status-1').innerText = "Updating";
-            if (document.getElementById('weekly-status-2')) document.getElementById('weekly-status-2').innerText = "Updating";
+            if (document.getElementById('weekly-status-1')) document.getElementById('weekly-status-1').innerText = "更新中";
+            if (document.getElementById('weekly-status-2')) document.getElementById('weekly-status-2').innerText = "更新中";
             container1.innerHTML = '';
             container2.innerHTML = '';
             
@@ -480,7 +480,7 @@
                     } catch (e3) {
                         log("3rd failed: " + e3.message);
                         container.innerHTML = `...`; // Error HTML
-                        if(statusSpan) statusSpan.innerText = "Error";
+                        if(statusSpan) statusSpan.innerText = "错误";
                         return;
                     }
                 }
@@ -552,7 +552,7 @@
                     </a>
                 </div>`;
             container.innerHTML = html;
-            if(statusSpan) statusSpan.innerText = "Updated";
+            if(statusSpan) statusSpan.innerText = "已更新";
         }
 
         // 함수 실행 시작
@@ -565,11 +565,11 @@
 
         function createFlightItemHTML(flight, type) {
             const rmk = flight.rmk || '';
-            const status = rmk.includes('지연') ? { t: '지연', c: '#ff9800' } : 
-                           rmk.includes('결항') ? { t: '결항', c: '#f44336' } :
+            const status = rmk.includes('지연') ? { t: '延误', c: '#ff9800' } : 
+                           rmk.includes('결항') ? { t: '取消', c: '#f44336' } :
                            { t: rmk, c: '#2e7d32' };
             
-            const route = type === 'dep' ? `To: ${flight.city} (${flight.airport})` : `From: ${flight.depcity} (${flight.depairport})`;
+            const route = type === 'dep' ? `目的地: ${flight.arrAirport}` : `出发地: ${flight.depAirport}`;
 
             return `
                 <div class="flight-info-item">
@@ -581,7 +581,7 @@
                         <div class="flight-route">${route}</div>
                     </div>
                     <div class="flight-status-container">
-                        <div class="flight-time">${flight.std}</div>
+                        <div class="flight-time">${flight.scheduledatetime.slice(-4, -2)}:${flight.scheduledatetime.slice(-2)}</div>
                         <span class="flight-remark" style="color:${status.c};">${status.t}</span>
                     </div>
                 </div>`;
@@ -592,8 +592,9 @@
             const statusSpan = document.getElementById(statusId);
             if (!container || !statusSpan) return;
 
-            const proxyBase = 'https://cors-anywhere.herokuapp.com/';
-            const proxiedUrl = proxyBase + url;
+            // Reverting to allorigins.win proxy as it's more suitable for non-interactive WebView environments
+            const proxyBase = 'https://api.allorigins.win/raw?url=';
+            const proxiedUrl = proxyBase + encodeURIComponent(url);
             log(`Fetching ${type} flights from: ` + proxiedUrl);
 
             try {
@@ -615,12 +616,10 @@
                     if (rmk.includes('지연') || rmk.includes('결항')) {
                         relevantFlights.push({
                             airline: item.querySelector("airline")?.textContent || '',
-                            flightId: item.querySelector("flightId")?.textContent || '',
-                            city: item.querySelector("city")?.textContent || '',
-                            airport: item.querySelector("airport")?.textContent || '',
-                            depcity: item.querySelector("depcity")?.textContent || '',
-                            depairport: item.querySelector("depairport")?.textContent || '',
-                            std: item.querySelector("std")?.textContent || '',
+                            flightId: item.querySelector("flightid")?.textContent || '', // Note: 'flightid' in response, not 'flightId'
+                            depAirport: item.querySelector("depAirport")?.textContent || '',
+                            arrAirport: item.querySelector("arrAirport")?.textContent || '',
+                            scheduledatetime: item.querySelector("scheduledatetime")?.textContent || '',
                             rmk: rmk
                         });
                     }
@@ -628,25 +627,25 @@
 
                 if (relevantFlights.length > 0) {
                     container.innerHTML = '<div style="padding: 10px;">' + relevantFlights.map(f => createFlightItemHTML(f, type)).join('') + '</div>';
-                    statusSpan.innerText = "Updated";
+                    statusSpan.innerText = "已更新";
                 } else {
-                    container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">현재 지연 또는 결항된 항공편이 없습니다.</div>`;
-                    statusSpan.innerText = "No Delays";
+                    container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">目前没有延误或取消的国际航班。</div>`;
+                    statusSpan.innerText = "无延误";
                 }
             } catch (e) {
                 log(`Flight Status Error (${type}): ${e.message}`);
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">정보를 가져오는 데 실패했습니다: ${e.message}</div>`;
-                statusSpan.innerText = "Error";
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999; font-size:12px;">获取信息失败: ${e.message}</div>`;
+                statusSpan.innerText = "错误";
             }
         }
 
         async function initDepartureFlights() {
-            const depUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const depUrl = `http://openapi.airport.co.kr/service/rest/StatusOfFlights/getDepFlightStatusList?serviceKey=${API_KEY}&airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359&pageNo=1&numOfRows=100`;
             await fetchFlightData(depUrl, 'flight-list-dep', 'flight-dep-status', 'dep');
         }
 
         async function initArrivalFlights() {
-            const arrUrl = `https://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359`;
+            const arrUrl = `http://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359&pageNo=1&numOfRows=100`;
             await fetchFlightData(arrUrl, 'flight-list-arr', 'flight-arr-status', 'arr');
         }
     </script>
