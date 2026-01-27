@@ -49,6 +49,17 @@
             font-weight: 800; font-size: 16px; color: #1a1a1a; display: flex; justify-content: space-between; align-items: center;
             flex-shrink: 0; /* Prevent header from shrinking */
         }
+        .refresh-icon {
+            cursor: pointer;
+            margin-left: 8px;
+            font-size: 14px;
+            color: #666;
+            transition: transform 0.3s ease;
+        }
+        .refresh-icon:hover {
+            transform: rotate(30deg);
+            color: #333;
+        }
         .card-content {
             flex-grow: 1; /* Allow content to fill available space */
             overflow-y: auto; /* Allow scrolling within the content area if needed */
@@ -83,6 +94,21 @@
         .precip-blue { color: #1e88e5; font-weight: bold; }
 
         footer { text-align: center; padding: 20px 10px; font-size: 11px; color: #999; }
+        .flight-remark { font-size:11px; font-weight:bold; }
+        .flight-details {
+            flex-grow: 1;
+            flex-shrink: 1;
+            min-width: 0;
+            word-break: break-word;
+        }
+        .flight-status-container {
+            flex-shrink: 0;
+            margin-left: 10px; /* Add some space between details and status */
+        }
+        /* Ensure flight ID and route can wrap if needed */
+        .flight-id-container, .flight-route {
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
@@ -152,7 +178,7 @@
         <!-- Card 7: Flight Departures -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">✈️ 国际线出发信息 <span class="badge" id="flight-dep-status">更新中</span></div>
+                <div class="card-header">✈️ 国际线出发信息 <span class="badge" id="flight-dep-status">更新中</span> <span class="refresh-icon" onclick="refreshDepartureFlights()">🔄</span></div>
                 <div class="card-content" id="flight-list-dep">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取出发信息...</div>
                 </div>
@@ -163,7 +189,7 @@
         <!-- Card 8: Flight Arrivals -->
         <div class="card">
             <div class="card-inner">
-                <div class="card-header">✈️ 国际线到达信息 <span class="badge" id="flight-arr-status">更新中</span></div>
+                <div class="card-header">✈️ 国际线到达信息 <span class="badge" id="flight-arr-status">更新中</span> <span class="refresh-icon" onclick="refreshArrivalFlights()">🔄</span></div>
                 <div class="card-content" id="flight-list-arr">
                     <div style="padding:40px; text-align:center; color:#999; font-size:12px;">正在获取到达信息...</div>
                 </div>
@@ -647,6 +673,19 @@
         async function initArrivalFlights() {
             const arrUrl = `http://openapi.airport.co.kr/service/rest/StatusOfFlights/getArrFlightStatusList?serviceKey=${API_KEY}&arr_airport_code=CJU&line=I&searchday=${todayStr}&from_time=0000&to_time=2359&pageNo=1&numOfRows=100`;
             await fetchFlightData(arrUrl, 'flight-list-arr', 'flight-arr-status', 'arr');
+        }
+
+        // 수동 새로고침 함수
+        function refreshDepartureFlights() {
+            const statusSpan = document.getElementById('flight-dep-status');
+            if(statusSpan) statusSpan.innerText = "刷新中...";
+            initDepartureFlights();
+        }
+
+        function refreshArrivalFlights() {
+            const statusSpan = document.getElementById('flight-arr-status');
+            if(statusSpan) statusSpan.innerText = "刷新中...";
+            initArrivalFlights();
         }
     </script>
 </body>
