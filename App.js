@@ -6,7 +6,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 // [중요] GitHub Pages의 최신 코드를 가져올 주소
-const WEB_URL = 'https://k97460300-coder.github.io/weather/mobile.html';
+const WEB_URL = 'https://k97460300-coder.github.io/weather/assets/mobile.html';
 
 // [기본] 네트워크 에러 시 사용할 백업 HTML
 const FALLBACK_HTML = `
