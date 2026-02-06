@@ -14,8 +14,15 @@
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "apk",
-        "withoutProguard": true
+        "buildType": "apk"
+      },
+      "config": {
+        "android": {
+          "bytecodeShaping": {
+            "optimize": false,
+            "obfuscate": false
+          }
+        }
       }
     }
   },
