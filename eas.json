@@ -15,10 +15,7 @@
       "autoIncrement": true,
       "android": {
         "buildType": "apk",
-        "bytecodeShaping": {
-          "optimize": false,
-          "obfuscate": false
-        }
+        "withoutProguard": true
       }
     }
   },
