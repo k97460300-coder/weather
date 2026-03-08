@@ -22,8 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": false,
-      "package": "com.smile0300.weatherapp",
-      "useProguard": false
+      "package": "com.smile0300.weatherapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
